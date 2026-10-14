@@ -1,5 +1,5 @@
 /* 狮山实达数据统计 —— 离线缓存 */
-const CACHE = 'sclh-v5';
+const CACHE = 'sclh-v6';
 const ASSETS = [
   './', './index.html', './manifest.json',
   './css/style.css',

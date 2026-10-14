@@ -1,0 +1,283 @@
+/* ================= 狮城联合数据统计 ================= */
+:root{
+  --navy:#14265A; --navy2:#20397F; --gold:#F2B705; --gold-d:#C89204;
+  --bg:#F2F4F9; --card:#FFFFFF; --line:#E5E8F0; --txt:#1B2233;
+  --muted:#7A8399; --green:#0E9F6E; --red:#E02424; --blue:#1D4ED8;
+  --bar-h:56px; --tab-h:60px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+  background:var(--bg);color:var(--txt);font-size:15px;line-height:1.55;
+  padding-top:var(--bar-h);padding-bottom:calc(var(--tab-h) + env(safe-area-inset-bottom));
+  -webkit-font-smoothing:antialiased;
+}
+h2,h3,p{margin:0}
+button{font-family:inherit;font-size:inherit;cursor:pointer;border:0;background:none;color:inherit}
+input,select,textarea{font-family:inherit;font-size:15px}
+img{max-width:100%}
+
+/* ---------- 顶栏 ---------- */
+.appbar{position:fixed;top:0;left:0;right:0;z-index:60;background:linear-gradient(135deg,var(--navy) 0%,var(--navy2) 100%);color:#fff;padding-top:env(safe-area-inset-top)}
+.appbar-in{height:var(--bar-h);display:flex;align-items:center;justify-content:space-between;padding:0 12px}
+.brand{display:flex;align-items:center;gap:9px;min-width:0}
+.brand-badge{width:32px;height:32px;border-radius:9px;background:var(--gold);color:var(--navy);font-weight:800;display:flex;align-items:center;justify-content:center;font-size:17px;flex:none}
+.brand-txt{min-width:0}
+.brand-txt b{display:block;font-size:15px;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand-txt small{font-size:11px;opacity:.75}
+.appbar-acts{display:flex;gap:2px;flex:none}
+.icobtn{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px}
+.icobtn:active{background:rgba(255,255,255,.15)}
+
+/* ---------- 视图 ---------- */
+.view{display:none;padding:12px 12px 20px}
+.view.active{display:block}
+
+/* ---------- 卡片 ---------- */
+.club-card{background:linear-gradient(135deg,var(--navy) 0%,var(--navy2) 100%);color:#fff;border-radius:16px;padding:16px;position:relative;overflow:hidden}
+.club-card::after{content:"";position:absolute;right:-30px;top:-30px;width:130px;height:130px;border-radius:50%;background:rgba(242,183,5,.16)}
+.club-top{display:flex;gap:12px;align-items:flex-start;position:relative;z-index:2}
+.club-logo{width:56px;height:56px;border-radius:14px;background:var(--gold);color:var(--navy);font-weight:800;font-size:24px;display:flex;align-items:center;justify-content:center;flex:none;overflow:hidden}
+.club-logo img{width:100%;height:100%;object-fit:cover}
+.club-meta{min-width:0;flex:1}
+.club-meta h2{font-size:18px;letter-spacing:.5px;line-height:1.3}
+.slogan{color:var(--gold);font-size:13px;margin-top:2px}
+.club-tags{margin-top:8px;display:flex;flex-wrap:wrap}
+.tag{display:inline-block;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.22);color:#fff;font-size:11px;padding:2px 9px;border-radius:20px;margin:0 6px 6px 0}
+.club-intro{font-size:12.5px;opacity:.85;margin-top:10px;position:relative;z-index:2;line-height:1.7}
+.club-stats{display:flex;margin-top:14px;border-top:1px solid rgba(255,255,255,.18);padding-top:12px;position:relative;z-index:2}
+.club-stats .st{flex:1;text-align:center;border-right:1px solid rgba(255,255,255,.14)}
+.club-stats .st:last-child{border-right:0}
+.club-stats .st b{display:block;font-size:19px;color:var(--gold);line-height:1.2}
+.club-stats .st span{font-size:11px;opacity:.8}
+
+/* 近况：战绩小球 + 胜率 */
+.club-form{position:relative;z-index:2;margin-top:12px}
+.formline{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.formlab{font-size:11px;opacity:.75;margin-right:2px}
+.formrate{margin-left:auto;font-size:11.5px;color:var(--gold);font-weight:700}
+.fm{width:19px;height:19px;border-radius:50%;font-size:10px;font-style:normal;font-weight:800;display:flex;align-items:center;justify-content:center;color:#fff}
+.fm.w{background:#0E9F6E}
+.fm.d{background:#8E9AAE}
+.fm.l{background:#E02424}
+
+/* 赛事筛选标签 */
+.chips{display:flex;gap:7px;overflow-x:auto;padding-bottom:2px;margin-bottom:10px;-webkit-overflow-scrolling:touch}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;height:30px;padding:0 13px;border-radius:15px;background:#fff;border:1px solid var(--line);font-size:12.5px;color:var(--muted);font-weight:600;white-space:nowrap}
+.chip.on{background:var(--navy);border-color:var(--navy);color:#fff}
+
+/* 赛程分组标题 */
+.grp-hd{display:flex;align-items:center;justify-content:space-between;padding:4px 2px 8px;font-size:12px;color:var(--muted);font-weight:700;font-style:normal}
+.grp-hd i{font-style:normal;font-weight:400;font-size:11px}
+.grp-hd:not(:first-child){margin-top:6px;padding-top:12px;border-top:1px solid var(--line)}
+
+/* 赛事徽标 */
+.fix-top{display:flex;align-items:center;gap:6px;margin-bottom:2px}
+.ctag{font-size:10px;padding:1px 6px;border-radius:4px;font-weight:700;color:#fff;line-height:1.5}
+.ctag.c-联赛{background:#1D4ED8}
+.ctag.c-杯赛{background:#7C3AED}
+.ctag.c-友谊赛{background:#0E9F6E}
+.ctag.c-内部赛{background:#C89204}
+.fix-home{font-size:10.5px;color:var(--muted)}
+
+/* 榜单表头 + 点球列 */
+.rk-hd{display:flex;align-items:center;gap:9px;padding:0 2px 7px;border-bottom:1px solid var(--line);font-size:11.5px;color:var(--muted);font-weight:700}
+.rk-hd .rk-c1,.rk .rk-nm.c1{flex:1;min-width:0}
+.rk-hd .rk-c2,.rk .rk-c2{width:42px;flex:none;text-align:center}
+.rk-hd .rk-c3,.rk .rk-v.c3{width:38px;flex:none;text-align:right}
+.rk .rk-nm.c1 small{display:block;font-size:10.5px;color:var(--muted);margin-left:0;margin-top:1px}
+
+/* 点球标记 */
+.ptag{display:inline-block;background:var(--gold);color:var(--navy);font-size:9.5px;font-style:normal;font-weight:800;padding:0 4px;border-radius:3px;margin-left:5px;vertical-align:middle}
+
+.block{background:var(--card);border-radius:14px;padding:14px;margin-top:12px;border:1px solid var(--line)}
+.block-hd{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px}
+.block-hd h3{font-size:15px;font-weight:700;padding-left:9px;border-left:3px solid var(--gold);line-height:1.1}
+.block-sub{font-size:12px;color:var(--muted)}
+.two-col{display:flex;gap:12px;padding:14px 10px}
+.two-col>div{flex:1;min-width:0}
+
+/* ---------- 列表 ---------- */
+.list{display:flex;flex-direction:column}
+.fix{display:flex;align-items:center;padding:10px;border:1px solid var(--line);border-radius:11px;margin-bottom:9px;background:#fff;gap:10px}
+.fix:last-child{margin-bottom:0}
+.fix:active{background:#FAFBFF}
+.fix-date{width:48px;flex:none;text-align:center;background:#F4F6FC;border-radius:9px;padding:5px 0}
+.fix-date b{display:block;font-size:16px;line-height:1.1;color:var(--navy)}
+.fix-date span{font-size:10px;color:var(--muted)}
+.fix-mid{flex:1;min-width:0}
+.fix-opp{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fix-extra{font-size:11.5px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fix-right{flex:none;text-align:right}
+.fix-score{font-size:17px;font-weight:800;color:var(--navy);letter-spacing:1px}
+.fix-score.win{color:var(--green)}
+.fix-score.lose{color:var(--red)}
+.fix-score.draw{color:var(--muted)}
+.pill{display:inline-block;font-size:10.5px;padding:1px 7px;border-radius:20px;background:#EEF2FA;color:var(--navy);border:1px solid #DDE4F2}
+.pill.up{background:#E8F7F0;color:var(--green);border-color:#C9EDDD}
+.pill.fin{background:#EEF2FA;color:var(--muted)}
+.pill.home{background:#FFF6E0;color:var(--gold-d);border-color:#F5E3B0}
+
+/* ---------- 榜单 ---------- */
+.rank{display:flex;flex-direction:column}
+.rk{display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px dashed #EDF0F7}
+.rk:last-child{border-bottom:0}
+.rk-no{width:22px;flex:none;text-align:center;font-size:12px;font-weight:800;color:var(--muted)}
+.rk-no.t1{color:#D4A100} .rk-no.t2{color:#8E9AAE} .rk-no.t3{color:#C08040}
+.rk-av{width:28px;height:28px;border-radius:50%;background:#EEF2FA;color:var(--navy);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none;overflow:hidden}
+.rk-av img{width:100%;height:100%;object-fit:cover}
+.rk-nm{flex:1;min-width:0;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rk-nm small{color:var(--muted);font-size:11px;margin-left:4px}
+.rk-v{font-size:14px;font-weight:800;color:var(--navy);flex:none}
+.rank.big .rk{padding:10px 2px}
+.rank.big .rk-nm{font-size:14.5px}
+.rank.big .rk-v{font-size:17px}
+
+/* ---------- 球员 / 场地卡片 ---------- */
+.cards{display:flex;flex-direction:column}
+.card{display:flex;align-items:center;gap:11px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px;margin-bottom:9px}
+.card:active{background:#FAFBFF}
+.c-av{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--navy),var(--navy2));color:var(--gold);font-weight:800;font-size:15px;display:flex;align-items:center;justify-content:center;flex:none;overflow:hidden}
+.c-av img{width:100%;height:100%;object-fit:cover}
+.c-num{position:relative}
+.c-num:after{content:attr(data-num);position:absolute;right:-3px;bottom:-3px;background:var(--gold);color:var(--navy);font-size:10px;font-weight:800;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px;border:1.5px solid #fff}
+.c-mid{flex:1;min-width:0}
+.c-t{font-size:14.5px;font-weight:600}
+.c-s{font-size:11.5px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c-g{margin-left:4px}
+
+/* ---------- 工具栏 ---------- */
+.toolbar{display:flex;gap:9px;align-items:center;margin-bottom:12px}
+.toolbar .ipt,.toolbar .sel{flex:1;min-width:0}
+.ipt,.sel{height:38px;border:1px solid var(--line);border-radius:10px;padding:0 11px;background:#fff;width:100%;color:var(--txt);outline:none}
+.ipt:focus,.sel:focus{border-color:var(--navy)}
+textarea.ipt{height:auto;padding:9px 11px;line-height:1.6}
+.btn{height:38px;padding:0 15px;border-radius:10px;background:var(--navy);color:#fff;font-weight:600;font-size:14px;white-space:nowrap;flex:none}
+.btn:active{opacity:.85}
+.btn.ghost{background:#fff;color:var(--navy);border:1px solid var(--navy)}
+.btn.gold{background:var(--gold);color:var(--navy)}
+.btn.red{background:#fff;color:var(--red);border:1px solid #F3C6C6}
+.btn.wide{width:100%;display:block}
+.btn.sm{height:32px;padding:0 11px;font-size:13px}
+.hint{font-size:12.5px;color:var(--muted);flex:1}
+.tabs{display:flex;background:#fff;border:1px solid var(--line);border-radius:11px;padding:3px;margin-bottom:12px}
+.tab{flex:1;height:34px;border-radius:9px;font-size:13.5px;color:var(--muted);font-weight:600}
+.tab.active{background:var(--navy);color:#fff}
+
+/* ---------- 底部导航 ---------- */
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:60;background:#fff;border-top:1px solid var(--line);display:flex;height:var(--tab-h);padding-bottom:env(safe-area-inset-bottom)}
+.tbtn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--muted)}
+.tbtn i{font-size:20px;line-height:1;font-style:normal}
+.tbtn span{font-size:11px}
+.tbtn.active{color:var(--navy)}
+.tbtn.active i{transform:translateY(-1px)}
+
+/* ---------- 弹窗 ---------- */
+.mask{position:fixed;inset:0;background:rgba(10,16,32,.45);z-index:80;display:none}
+.mask.on{display:block}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:90;background:#fff;border-radius:18px 18px 0 0;max-height:88vh;display:none;flex-direction:column;padding-bottom:env(safe-area-inset-bottom)}
+.sheet.on{display:flex}
+.sheet-hd{display:flex;align-items:center;justify-content:space-between;padding:13px 14px;border-bottom:1px solid var(--line)}
+.sheet-hd b{font-size:16px}
+.sheet-bd{padding:14px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.fld{margin-bottom:12px}
+.fld label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:5px;font-weight:600}
+.row2{display:flex;gap:10px}
+.row2>div{flex:1;min-width:0}
+.acts{display:flex;gap:10px;margin-top:6px}
+.acts .btn{flex:1}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{flex:1;height:36px;font-size:13.5px;color:var(--muted);border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--navy);color:#fff}
+.seg.five button{font-size:12.5px;padding:0 2px}
+.tabs.six{overflow-x:auto}
+.tabs.six .tab{flex:none;min-width:52px;font-size:12.5px}
+
+/* 事件行 */
+.ev{display:flex;align-items:center;gap:9px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px;background:#FBFBFE}
+.ev-b{width:38px;flex:none;text-align:center;font-size:11px;font-weight:800;border-radius:7px;padding:3px 0;background:#FFF3D6;color:var(--gold-d)}
+.ev-b.a{background:#E4EEFF;color:var(--blue)}
+.ev-b.s{background:#EEF2FA;color:#5A6B8C}
+.ev-b.y{background:#FFF0C2;color:#A87B00}
+.ev-b.r{background:#FDE3E3;color:#C81E1E}
+.ev-m{flex:1;min-width:0;font-size:13.5px}
+.ev-m small{color:var(--muted);font-size:11.5px;margin-left:6px}
+.ev-x{width:26px;height:26px;border-radius:7px;background:#FDECEC;color:var(--red);font-size:13px;flex:none}
+
+.empty{text-align:center;color:var(--muted);font-size:13px;padding:26px 10px}
+.empty i{display:block;font-size:30px;margin-bottom:6px;font-style:normal;opacity:.5}
+
+/* ---------- 截图 ---------- */
+.shot-wrap{background:var(--bg);border-radius:12px;padding:8px}
+.shot-foot{display:flex;justify-content:space-between;margin-top:12px;padding:10px 14px;background:var(--navy);color:#fff;border-radius:10px;font-size:11.5px}
+.shotview{position:fixed;left:0;right:0;bottom:0;top:0;z-index:100;background:#fff;display:none;flex-direction:column}
+.shotview.on{display:flex}
+.shotview-hd{display:flex;align-items:center;justify-content:space-between;padding:13px 14px;border-bottom:1px solid var(--line)}
+.shotview-bd{flex:1;overflow-y:auto;background:#EDEFF5;padding:12px;text-align:center}
+.shotview-bd img{width:100%;border-radius:10px;display:block;box-shadow:0 4px 18px rgba(0,0,0,.15)}
+.shotview-ft{display:flex;gap:10px;padding:12px 14px;border-top:1px solid var(--line)}
+.shotview-ft .btn{flex:1}
+.tip{font-size:12px;color:var(--muted);text-align:center;padding:0 14px 14px;margin:0}
+
+/* ---------- toast ---------- */
+.toast{position:fixed;left:50%;bottom:calc(var(--tab-h) + 26px);transform:translateX(-50%) translateY(12px);background:rgba(20,38,90,.95);color:#fff;font-size:13.5px;padding:9px 16px;border-radius:22px;z-index:200;opacity:0;pointer-events:none;transition:.22s;max-width:82%;text-align:center}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ---------- 管理面板 ---------- */
+.admin-item{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--line)}
+.admin-item:last-child{border-bottom:0}
+.admin-item .ai-l b{display:block;font-size:14px}
+.admin-item .ai-l small{font-size:11.5px;color:var(--muted)}
+.badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;background:#E8F7F0;color:var(--green);border:1px solid #C9EDDD}
+.badge.warn{background:#FFF6E0;color:var(--gold-d);border-color:#F5E3B0}
+.badge.off{background:#F1F2F6;color:var(--muted);border-color:#E3E6EE}
+.note{background:#F7F9FD;border:1px solid var(--line);border-radius:10px;padding:11px;font-size:12.5px;color:var(--muted);line-height:1.7;margin-bottom:12px}
+.code{background:#0F1B33;color:#B9E0FF;font-size:11.5px;padding:10px;border-radius:8px;overflow-x:auto;white-space:pre-wrap;word-break:break-all;line-height:1.6;margin:8px 0}
+
+/* ===================== 手机友好优化 ===================== */
+/* iOS 上字号小于 16px 的输入框会触发页面自动缩放，这里统一 16px */
+.ipt,.sel{font-size:16px}
+/* 触控目标不小于 44px */
+.ipt,.sel{height:46px}
+.btn{height:46px;font-size:15.5px}
+.btn.sm{height:36px}
+.chip{height:36px;padding:0 15px;font-size:13.5px}
+.tab{height:40px;font-size:14px}
+.icobtn{width:40px;height:40px}
+.ev-x{width:32px;height:32px}
+/* 大号输入（录入页用） */
+.ipt.big,.sel.big{height:50px;font-size:16.5px}
+.btn.big{height:52px;font-size:16.5px;font-weight:700}
+/* 录入页：进球 / 助攻行 */
+.evrow{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.evrow .ev-p{flex:1;min-width:0}
+.evrow .ev-n{width:74px;flex:none;text-align:center;font-weight:700}
+.evrow .ev-del{width:40px;height:46px;flex:none;border-radius:10px;background:#FDECEC;color:var(--red);font-size:15px}
+/* 比分输入 */
+.score-row{display:flex;align-items:center;gap:10px}
+.score-row .ipt{flex:1;text-align:center;font-weight:800;font-size:20px}
+.score-row .vs{font-size:22px;font-weight:800;color:var(--muted);flex:none}
+/* 录入页卡片去掉多余内边距，方便单手操作 */
+.block.rc{padding:16px 14px}
+.block.rc .fld{margin-bottom:14px}
+/* 底部导航加高，文字更清楚 */
+.tabbar{height:62px}
+.tbtn i{font-size:22px}
+.tbtn span{font-size:11.5px;font-weight:600}
+.tbtn.active span{font-weight:800}
+/* 表单标签更醒目 */
+.fld label{font-size:13px;color:#5A6B8C}
+/* 数字输入框去掉右侧箭头，视觉更干净 */
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+input[type=number]{-moz-appearance:textfield}
+
+@media (min-width:640px){
+  body{max-width:520px;margin:0 auto;background:#E9ECF4}
+  .appbar,.tabbar,.sheet,.shotview{max-width:520px;left:50%;right:auto;transform:translateX(-50%)}
+  .tabbar,.appbar{width:100%}
+  .sheet,.shotview{width:100%}
+}

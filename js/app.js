@@ -1,0 +1,1303 @@
+/* ============================================================
+ *  狮山实达数据统计 —— 主程序
+ * ============================================================ */
+(function () {
+  'use strict';
+
+  const $ = (s, r) => (r || document).querySelector(s);
+  const $$ = (s, r) => Array.prototype.slice.call((r || document).querySelectorAll(s));
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  /* ---------------- 全局错误提示 ----------------
+     任何 JS 错误都显式告知，避免「点击没反应」却查不到原因 */
+  global.addEventListener('error', e => {
+    console.error('[运行错误]', e.message, e.filename, e.lineno);
+    try { toast('出错了：' + (e.message || '未知错误')); } catch (_) { }
+  });
+  global.addEventListener('unhandledrejection', e => {
+    console.error('[异步错误]', e.reason);
+    try { toast('出错了：' + ((e.reason && e.reason.message) || '网络或数据异常')); } catch (_) { }
+  });
+
+  const W = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
+  /* 赛事类型 */
+  const COMPS = ['联赛', '杯赛', '友谊赛', '内部赛'];
+  /* 事件类型：中文名 / 单位 / 榜单名 */
+  const EV_TYPES = {
+    goal: { name: '进球', unit: '球', lb: '射手榜' },
+    assist: { name: '助攻', unit: '助', lb: '助攻榜' },
+    app: { name: '出场', unit: '场', lb: '出场榜' },
+    shoot: { name: '射门', unit: '次', lb: '射门榜' },
+    yellow: { name: '黄牌', unit: '张', lb: '黄牌榜' },
+    red: { name: '红牌', unit: '张', lb: '红牌榜' }
+  };
+
+  const ST = { profile: null, players: [], venues: [], matches: [], events: [], role: 'guest', admin: false, recorder: false, user: '', lb: 'goal', comp: '' };
+
+  /* ---------------- 基础工具 ---------------- */
+  function toast(msg) {
+    const t = $('#toast'); t.textContent = msg; t.classList.add('on');
+    clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('on'), 1900);
+  }
+  function toLocalInput(iso) {
+    if (!iso) return '';
+    const d = new Date(iso); if (isNaN(d)) return '';
+    const p = n => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+  function toISO(v) { const d = new Date(v); return isNaN(d) ? null : d.toISOString(); }
+  function fmtDateTime(iso) {
+    const d = new Date(iso); if (isNaN(d)) return '待定';
+    return (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + W[d.getDay()] + ' ' +
+      String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+  function dayBlock(iso) {
+    const d = new Date(iso);
+    if (isNaN(d)) return { d: '?', m: '待定', t: '待定' };
+    const hh = String(d.getHours()).padStart(2, '0'), mm = String(d.getMinutes()).padStart(2, '0');
+    return { d: d.getDate(), m: (d.getMonth() + 1) + '月', t: hh + ':' + mm };
+  }
+  function playerById(id) { return ST.players.find(p => p.id === id) || null; }
+  function venueById(id) { return ST.venues.find(v => v.id === id) || null; }
+  function avatarHtml(name, url, cls, num) {
+    const n = esc(String(name || '?').slice(-2));
+    const inner = url ? '<img src="' + esc(url) + '" alt="">' : esc(n);
+    return '<div class="' + cls + '"' + (num != null ? ' data-num="' + esc(num) + '"' : '') + '>' + inner + '</div>';
+  }
+
+  /* ---------------- 登录状态 ----------------
+     三种角色：guest（只读）/ recorder（录入员）/ admin（管理员） */
+  function readLogin() {
+    try { return JSON.parse(localStorage.getItem('sclh_login') || 'null'); }
+    catch (e) { return null; }
+  }
+  function loadAdmin() {
+    const s = readLogin();
+    const ok = s && s.exp > Date.now() ? s.role : 'guest';
+    ST.role = ok; ST.admin = ok === 'admin'; ST.recorder = ok === 'recorder';
+    ST.user = (ok === 'guest' ? '' : (s.user || ''));
+    return ST.role;
+  }
+  function setLogin(role, user) {
+    ST.role = role; ST.user = user || '';
+    ST.admin = role === 'admin'; ST.recorder = role === 'recorder';
+    if (role === 'guest') localStorage.removeItem('sclh_login');
+    else localStorage.setItem('sclh_login', JSON.stringify({
+      role: role, user: user || '', exp: Date.now() + APP_CONFIG.adminSessionHours * 3600 * 1000
+    }));
+  }
+  function logout() { setLogin('guest', ''); }
+  function canEdit() { return ST.role === 'admin'; }          // 改球员/场地/球队资料/删数据
+  function canRecord() { return ST.role === 'admin' || ST.role === 'recorder'; } // 录比赛
+  function requireAdmin() {
+    if (canEdit()) return true;
+    toast('请先登录管理员账号');
+    openAdmin();
+    return false;
+  }
+  function requireRecord() {
+    if (canRecord()) return true;
+    toast('请先登录（管理员或录入员）');
+    openAdmin();
+    return false;
+  }
+
+  /* ---------------- 数据刷新 ---------------- */
+  async function refresh(msg) {
+    try {
+      ST.profile = await Store.getProfile();
+      ST.players = await Store.list('players');
+      ST.venues = await Store.list('venues');
+      ST.matches = await Store.list('matches');
+      ST.events = await Store.list('events');
+      renderAll();
+      if (msg) toast(msg);
+    } catch (e) {
+      console.error(e); toast('数据读取失败：' + (e.message || e));
+    }
+  }
+
+  /* ---------------- 统计计算 ---------------- */
+  /* 榜单统计：支持 goal/assist/app/shoot/yellow/red，进球额外统计点球数 */
+  function board(type) {
+    const map = {};
+    if (type === 'app') {
+      /* 出场：该球员「出现在任意事件里」的不同比赛数（进球/助攻/射门/黄牌都算出场） */
+      ST.events.forEach(e => {
+        if (!e.match_id || !e.player_id) return;
+        const m = map[e.player_id] = map[e.player_id] || { v: new Set(), pen: 0 };
+        m.v.add(e.match_id);
+      });
+    } else {
+      ST.events.forEach(e => {
+        if (e.type !== type) return;
+        const c = Number(e.count) || 0;
+        const m = map[e.player_id] = map[e.player_id] || { v: 0, pen: 0 };
+        m.v += c;
+        if (e.is_penalty && type === 'goal') m.pen += c;
+      });
+    }
+    const rows = Object.keys(map).map(pid => {
+      const p = playerById(pid); if (!p) return null;
+      const v = type === 'app' ? map[pid].v.size : map[pid].v;
+      return { p: p, v: v, pen: map[pid].pen || 0 };
+    }).filter(Boolean);
+    rows.sort((a, b) => b.v - a.v || (Number(a.p.number) || 99) - (Number(b.p.number) || 99));
+    return rows;
+  }
+  /* 球队战绩：胜/平/负、积分、胜率 */
+  function record() {
+    const fin = finishedMatches();
+    let w = 0, d = 0, l = 0, gf = 0, ga = 0;
+    fin.forEach(m => {
+      const a = Number(m.our_score) || 0, b = Number(m.opp_score) || 0;
+      gf += a; ga += b;
+      if (a > b) w++; else if (a < b) l++; else d++;
+    });
+    const n = fin.length;
+    return { n: n, w: w, d: d, l: l, gf: gf, ga: ga, pts: w * 3 + d, gd: gf - ga, rate: n ? Math.round(w / n * 100) : 0 };
+  }
+  function totalGoals() {
+    return ST.matches.filter(m => m.status === 'finished').reduce((s, m) => s + (Number(m.our_score) || 0), 0);
+  }
+  function finishedMatches() { return ST.matches.filter(m => m.status === 'finished'); }
+  function wins() { return finishedMatches().filter(m => (Number(m.our_score) || 0) > (Number(m.opp_score) || 0)).length; }
+
+  /* ---------------- 渲染 ---------------- */
+  function renderAll() {
+    renderClub(); renderHomeFixtures(); renderHomeBoards();
+    renderCompFilter(); renderFixtures(); renderFullRank(); renderPlayers(); renderVenues();
+    if (ST.view === 'record') renderRecord();
+    /* 只读身份隐藏「添加」类按钮 */
+    ['#btnAddMatch', '#btnAddPlayer', '#btnAddVenue'].forEach(s => {
+      const n = $(s); if (n) n.style.display = canEdit() ? '' : 'none';
+    });
+    $('#modeTag').textContent = (Store.isCloud() ? '云端已连接' : '本机模式') +
+      (ST.role === 'admin' ? ' · 管理员' : ST.role === 'recorder' ? ' · 录入员' : '');
+    $('#venueHint').textContent = '共 ' + ST.venues.length + ' 个场地';
+    const d = new Date();
+    $('#shotDate').textContent = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    const fs = $('#seasonFilter');
+    const seasons = Array.from(new Set(ST.matches.map(m => m.season).filter(Boolean))).sort().reverse();
+    const cur = fs.value;
+    fs.innerHTML = '<option value="">全部赛季</option>' + seasons.map(s => '<option value="' + esc(s) + '">' + esc(s) + '</option>').join('');
+    if (cur) fs.value = cur;
+  }
+
+  function renderClub() {
+    const p = ST.profile || DEFAULT_PROFILE;
+    $('#clubName').textContent = p.name || '狮山实达';
+    $('#clubSlogan').textContent = p.slogan || '';
+    $('#clubFounded').textContent = '成立 ' + (p.founded || '--');
+    $('#clubHome').textContent = p.home_venue || '主场待定';
+    $('#clubIntro').textContent = p.intro || '';
+    $('#appTitle').textContent = APP_CONFIG.appName;
+    const logo = $('#clubLogo');
+    logo.innerHTML = p.logo_url ? '<img src="' + esc(p.logo_url) + '" alt="">' : esc(String(p.name || '狮').replace(/足球|俱乐部|队/g, '').slice(0, 2) || '狮');
+    const r = record();
+    /* 近 5 场战绩小球（胜绿 / 平灰 / 负红） */
+    const recent = finishedMatches().slice(0, 5).map(m => {
+      const a = Number(m.our_score) || 0, b = Number(m.opp_score) || 0;
+      const cls = a > b ? 'w' : (a < b ? 'l' : 'd');
+      const t = a > b ? '胜' : (a < b ? '负' : '平');
+      return '<i class="fm ' + cls + '">' + t + '</i>';
+    }).join('');
+    $('#clubForm').innerHTML = recent
+      ? '<div class="formline"><span class="formlab">近况</span>' + recent + '<span class="formrate">胜率 ' + r.rate + '%</span></div>'
+      : '';
+    $('#clubStats').innerHTML =
+      '<div class="st"><b>' + r.n + '</b><span>已赛</span></div>' +
+      '<div class="st"><b>' + r.pts + '</b><span>积分</span></div>' +
+      '<div class="st"><b>' + r.gf + '</b><span>进球</span></div>' +
+      '<div class="st"><b>' + (r.gd > 0 ? '+' : '') + r.gd + '</b><span>净胜球</span></div>' +
+      '<div class="st"><b>' + ST.players.filter(x => x.active !== false).length + '</b><span>在队</span></div>';
+  }
+
+  function fixtureRow(m, withVenue) {
+    const db = dayBlock(m.match_date);
+    const fin = m.status === 'finished';
+    const home = !!m.is_home;
+    let score = '', cls = '';
+    if (fin) {
+      const a = Number(m.our_score) || 0, b = Number(m.opp_score) || 0;
+      score = a + ' : ' + b;
+      cls = a > b ? 'win' : (a < b ? 'lose' : 'draw');
+    } else if (m.status === 'cancelled') { score = '取消'; cls = 'draw'; }
+    else { score = m.match_date ? '未开始' : '待定'; cls = 'draw'; }
+    const v = venueById(m.venue_id);
+    const extra = [v ? v.name : '', m.round || ''].filter(Boolean).join(' · ');
+    const cp = m.competition || '';
+    return '<div class="fix" data-mid="' + esc(m.id) + '">' +
+      '<div class="fix-date"><b>' + db.d + '</b><span>' + db.m + '</span></div>' +
+      '<div class="fix-mid">' +
+        '<div class="fix-top">' +
+          (cp ? '<span class="ctag c-' + esc(cp) + '">' + esc(cp) + '</span>' : '') +
+          '<span class="fix-home">' + (home ? '主场' : '客场') + '</span>' +
+        '</div>' +
+        '<div class="fix-opp">' + esc(m.opponent || '待定对手') + '</div>' +
+        '<div class="fix-extra">' + esc(extra || '待定') + '</div></div>' +
+      '<div class="fix-right"><div class="fix-score ' + cls + '">' + score + '</div>' +
+      '<div style="margin-top:3px"><span class="pill ' + (fin ? 'fin' : 'up') + '">' + (fin ? '已结束' : (m.status === 'cancelled' ? '已取消' : '未开始')) + '</span>' +
+      '</div></div></div>';
+  }
+
+  function renderHomeFixtures() {
+    const up = ST.matches.filter(m => m.status === 'upcoming').sort((a, b) => new Date(a.match_date || 9e15) - new Date(b.match_date || 9e15)).slice(0, 2);
+    const fin = finishedMatches().slice(0, 2);
+    const list = up.concat(fin);
+    $('#homeFixtures').innerHTML = list.length ? list.map(m => fixtureRow(m)).join('') :
+      '<div class="empty"><i>📅</i>暂无赛程，点击右上角 ⚙️ 登录后可添加</div>';
+    $('#fixtureSub').textContent = '共 ' + ST.matches.length + ' 场';
+  }
+
+  function rankHtml(rows, limit, emptyTxt) {
+    if (!rows.length) return '<div class="empty" style="padding:14px 0">' + (emptyTxt || '暂无数据') + '</div>';
+    const r = limit ? rows.slice(0, limit) : rows;
+    return r.map((x, i) => {
+      const cls = i === 0 ? 't1' : i === 1 ? 't2' : i === 2 ? 't3' : '';
+      return '<div class="rk"><div class="rk-no ' + cls + '">' + (i + 1) + '</div>' +
+        avatarHtml(x.p.name, x.p.avatar_url, 'rk-av') +
+        '<div class="rk-nm">' + esc(x.p.name) + (x.p.number ? '<small>#' + esc(x.p.number) + '</small>' : '') + '</div>' +
+        '<div class="rk-v">' + x.v + '</div></div>';
+    }).join('');
+  }
+
+  function renderHomeBoards() {
+    $('#homeGoals').innerHTML = rankHtml(board('goal'), 5, '暂无进球数据');
+    $('#homeAssists').innerHTML = rankHtml(board('assist'), 5, '暂无助攻数据');
+  }
+
+  /* 赛事筛选标签 */
+  function renderCompFilter() {
+    const used = Array.from(new Set(ST.matches.map(m => m.competition).filter(Boolean)));
+    const all = ['全部'].concat(COMPS.filter(c => used.indexOf(c) >= 0))
+      .concat(used.filter(c => COMPS.indexOf(c) < 0 && c !== '全部'));
+    const el = $('#compFilter');
+    el.innerHTML = all.map(c => {
+      const v = c === '全部' ? '' : c;
+      const n = c === '全部' ? ST.matches.length : ST.matches.filter(m => (m.competition || '') === v).length;
+      return '<button class="chip' + (ST.comp === v ? ' on' : '') + '" data-c="' + esc(v) + '">' + esc(c) + ' ' + n + '</button>';
+    }).join('');
+    $$('#compFilter .chip').forEach(b => b.onclick = () => { ST.comp = b.dataset.c; renderFixtures(); renderCompFilter(); });
+  }
+
+  function renderFixtures() {
+    const s = $('#seasonFilter').value;
+    let list = ST.matches.slice().sort((a, b) => new Date(b.match_date || 0) - new Date(a.match_date || 0));
+    if (s) list = list.filter(m => m.season === s);
+    if (ST.comp) list = list.filter(m => (m.competition || '') === ST.comp);
+    const el = $('#allFixtures');
+    if (!list.length) {
+      el.innerHTML = '<div class="empty"><i>📅</i>暂无赛程</div>';
+    } else {
+      /* 按月份分组 */
+      const groups = []; let cur = null;
+      list.forEach(m => {
+        const d = new Date(m.match_date || 0);
+        const key = isNaN(d) ? '待定' : (d.getFullYear() + '年' + (d.getMonth() + 1) + '月');
+        if (!cur || cur.key !== key) { cur = { key: key, list: [] }; groups.push(cur); }
+        cur.list.push(m);
+      });
+      el.innerHTML = groups.map(g =>
+        '<div class="grp-hd"><span>' + esc(g.key) + '</span><i>' + g.list.length + ' 场</i></div>' +
+        g.list.map(m => fixtureRow(m, true)).join('')
+      ).join('');
+    }
+    $$('#allFixtures .fix').forEach(n => n.onclick = () => openMatch(n.dataset.mid));
+    $$('#homeFixtures .fix').forEach(n => n.onclick = () => openMatch(n.dataset.mid));
+  }
+
+  function renderFullRank() {
+    const t = ST.lb;
+    const rows = board(t);
+    const meta = EV_TYPES[t] || { name: '数据', unit: '', lb: '榜单' };
+    const showPen = t === 'goal';
+    let html = '';
+    if (!rows.length) {
+      html = '<div class="empty"><i>🏆</i>暂无' + meta.name + '数据</div>';
+    } else {
+      html = '<div class="rk-hd">' +
+        '<span class="rk-c1">' + meta.lb + '</span>' +
+        (showPen ? '<span class="rk-c2">点球</span>' : '') +
+        '<span class="rk-c3">' + meta.name + '</span></div>';
+      html += rows.map((x, i) => {
+        const cls = i === 0 ? 't1' : i === 1 ? 't2' : i === 2 ? 't3' : '';
+        const sub = '<small>#' + esc(x.p.number || '-') + ' · ' + esc(x.p.position || '球员') + '</small>';
+        const pen = showPen ? '<span class="rk-c2">' + (x.pen || 0) + '</span>' : '';
+        return '<div class="rk"><div class="rk-no ' + cls + '">' + (i + 1) + '</div>' +
+          avatarHtml(x.p.name, x.p.avatar_url, 'rk-av') +
+          '<div class="rk-nm c1">' + esc(x.p.name) + sub + '</div>' +
+          pen +
+          '<div class="rk-v c3">' + x.v + '</div></div>';
+      }).join('');
+    }
+    $('#fullRank').innerHTML = html;
+    $('#statMatches').innerHTML = finishedMatches().slice(0, 5).map(m => fixtureRow(m)).join('') ||
+      '<div class="empty" style="padding:14px 0">暂无比赛记录</div>';
+    $$('#statMatches .fix').forEach(n => n.onclick = () => openMatch(n.dataset.mid));
+  }
+
+  function renderPlayers() {
+    const kw = ($('#playerSearch').value || '').trim().toLowerCase();
+    let list = ST.players.slice().sort((a, b) => (Number(a.number) || 99) - (Number(b.number) || 99));
+    if (kw) list = list.filter(p => (p.name || '').toLowerCase().includes(kw) || String(p.number || '').includes(kw));
+    const g = board('goal'), a = board('assist');
+    const gm = {}, am = {};
+    g.forEach(x => gm[x.p.id] = x.v); a.forEach(x => am[x.p.id] = x.v);
+    $('#playerList').innerHTML = list.length ? list.map(p =>
+      '<div class="card" data-pid="' + esc(p.id) + '">' +
+      avatarHtml(p.name, p.avatar_url, 'c-av c-num', p.number) +
+      '<div class="c-mid"><div class="c-t">' + esc(p.name) + (p.active === false ? ' <span class="badge off">离队</span>' : '') + '</div>' +
+      '<div class="c-s">' + esc(p.position || '位置待定') + ' · 进 ' + (gm[p.id] || 0) + ' 球 · 助 ' + (am[p.id] || 0) + ' 次' + (p.phone ? ' · ' + esc(p.phone) : '') + '</div></div>' +
+      '<div class="c-g" style="font-size:12px;color:#7A8399">›</div></div>').join('') :
+      '<div class="empty"><i>👥</i>暂无球员</div>';
+    $$('#playerList .card').forEach(n => n.onclick = () => openPlayer(n.dataset.pid));
+  }
+
+  function renderVenues() {
+    $('#venueList').innerHTML = ST.venues.length ? ST.venues.map(v =>
+      '<div class="card" data-vid="' + esc(v.id) + '">' +
+      '<div class="c-av">⚽</div>' +
+      '<div class="c-mid"><div class="c-t">' + esc(v.name) + '</div>' +
+      '<div class="c-s">' + esc([v.surface, v.price != null && v.price !== '' ? '¥' + v.price + '/场' : '', v.address].filter(Boolean).join(' · ')) + '</div></div>' +
+      '<div class="c-g" style="font-size:12px;color:#7A8399">›</div></div>').join('') :
+      '<div class="empty"><i>⚽</i>暂无场地</div>';
+    $$('#venueList .card').forEach(n => n.onclick = () => openVenue(n.dataset.vid));
+  }
+
+  /* ---------------- 弹窗 ---------------- */
+  function openSheet(title, html, after) {
+    const t = $('#sheetTitle'), b = $('#sheetBody'), s = $('#sheet'), m = $('#mask');
+    if (!b || !s) {                       // 结构缺失时降级为 alert，绝不让脚本静默中断
+      console.error('弹窗结构缺失', { t: !!t, b: !!b, s: !!s, m: !!m });
+      alert('页面结构未就绪，请刷新页面重试');
+      return;
+    }
+    if (t) t.textContent = title;
+    b.innerHTML = html;
+    s.classList.add('on'); if (m) m.classList.add('on');
+    if (after) {
+      try { after(b); }
+      catch (e) { console.error('弹窗回调出错', e); toast('界面初始化出错：' + (e.message || e)); }
+    }
+  }
+  function closeSheet() {
+    const s = $('#sheet'), m = $('#mask');
+    if (s) s.classList.remove('on');
+    if (m) m.classList.remove('on');
+  }
+  /* 安全绑定：元素不存在时只警告，不中断整个脚本 */
+  function on(sel, ev, fn) {
+    const n = $(sel);
+    if (!n) { console.warn('未找到元素', sel); return null; }
+    n[ev] = fn; return n;
+  }
+  on('#sheetClose', 'onclick', closeSheet);
+  on('#mask', 'onclick', closeSheet);
+
+  /* ---------------- 球队介绍 ---------------- */
+  function openProfile() {
+    const p = ST.profile || DEFAULT_PROFILE;
+    openSheet('球队介绍',
+      '<div class="fld"><label>球队名称</label><input class="ipt" id="f_name" value="' + esc(p.name || '') + '"></div>' +
+      '<div class="fld"><label>口号</label><input class="ipt" id="f_slogan" value="' + esc(p.slogan || '') + '"></div>' +
+      '<div class="row2"><div class="fld"><label>成立年份</label><input class="ipt" id="f_founded" value="' + esc(p.founded || '') + '"></div>' +
+      '<div class="fld"><label>主场</label><input class="ipt" id="f_home" value="' + esc(p.home_venue || '') + '"></div></div>' +
+      '<div class="fld"><label>队徽图片地址（可留空）</label><input class="ipt" id="f_logo" placeholder="https://..." value="' + esc(p.logo_url || '') + '"></div>' +
+      '<div class="fld"><label>球队简介</label><textarea class="ipt" id="f_intro" rows="4">' + esc(p.intro || '') + '</textarea></div>' +
+      '<div class="acts"><button class="btn" id="f_save">保存</button></div>', () => {
+        $('#f_save').onclick = async () => {
+          try {
+            await Store.saveProfile({
+              name: $('#f_name').value.trim(), slogan: $('#f_slogan').value.trim(),
+              founded: $('#f_founded').value.trim(), home_venue: $('#f_home').value.trim(),
+              logo_url: $('#f_logo').value.trim(), intro: $('#f_intro').value.trim()
+            });
+            closeSheet(); refresh('球队介绍已更新');
+          } catch (e) { toast('保存失败：' + e.message); }
+        };
+      });
+  }
+
+  /* ---------------- 比赛 ---------------- */
+  function openMatch(id) {
+    const m = ST.matches.find(x => x.id === id); if (!m) return;
+    const admin = canEdit();
+    const vOpts = ST.venues.map(v => '<option value="' + esc(v.id) + '"' + (v.id === m.venue_id ? ' selected' : '') + '>' + esc(v.name) + '</option>').join('');
+    let html = '';
+    if (admin) {
+      html +=
+        '<div class="fld"><label>对手</label><input class="ipt" id="m_opp" value="' + esc(m.opponent || '') + '"></div>' +
+        '<div class="fld"><label>比赛时间</label><input class="ipt" type="datetime-local" id="m_date" value="' + toLocalInput(m.match_date) + '"></div>' +
+        '<div class="row2"><div class="fld"><label>赛季</label><input class="ipt" id="m_season" value="' + esc(m.season || '') + '"></div>' +
+        '<div class="fld"><label>轮次</label><input class="ipt" id="m_round" value="' + esc(m.round || '') + '"></div></div>' +
+        '<div class="fld"><label>赛事</label><div class="seg five" id="m_comp">' +
+        COMPS.map(c => '<button data-v="' + esc(c) + '" class="' + ((m.competition || '联赛') === c ? 'on' : '') + '">' + esc(c) + '</button>').join('') +
+        '</div></div>' +
+        '<div class="fld"><label>主客场</label><div class="seg" id="m_side"><button data-v="1" class="' + (m.is_home ? 'on' : '') + '">主场</button><button data-v="0" class="' + (m.is_home ? '' : 'on') + '">客场</button></div></div>' +
+        '<div class="fld"><label>场地</label><select class="ipt" id="m_venue"><option value="">未指定</option>' + vOpts + '</select></div>' +
+        '<div class="fld"><label>比分</label><div class="row2">' +
+        '<div><input class="ipt" type="number" id="m_ourscore" placeholder="我方" value="' + (m.our_score == null ? '' : m.our_score) + '"></div>' +
+        '<div><input class="ipt" type="number" id="m_oppscore" placeholder="对手" value="' + (m.opp_score == null ? '' : m.opp_score) + '"></div></div></div>' +
+        '<div class="fld"><label>状态</label><div class="seg" id="m_status">' +
+        ['upcoming:未开始', 'finished:已结束', 'cancelled:已取消'].map(s => {
+          const [k, t] = s.split(':');
+          return '<button data-v="' + k + '" class="' + (m.status === k ? 'on' : '') + '">' + t + '</button>';
+        }).join('') + '</div></div>' +
+        '<div class="fld"><label>备注</label><input class="ipt" id="m_remark" value="' + esc(m.remark || '') + '"></div>' +
+        '<div class="acts"><button class="btn" id="m_save">保存</button><button class="btn red" id="m_del">删除</button></div>';
+    } else {
+      html += '<div class="note">' + esc(m.opponent || '待定对手') + ' · ' + fmtDateTime(m.match_date) + ' · ' +
+        (m.is_home ? '主场' : '客场') + '<br>比分：' +
+        (m.status === 'finished' ? (Number(m.our_score) || 0) + ' : ' + (Number(m.opp_score) || 0) : (m.status === 'cancelled' ? '已取消' : '未开始')) +
+        (m.remark ? '<br>' + esc(m.remark) : '') + '</div>';
+      /* 录入员可删除自己录入的那场 */
+      if (ST.role === 'recorder' && m.created_by && m.created_by === ST.user) {
+        html += '<div style="margin-top:10px"><button class="btn wide red" id="m_mydel">删除我录入的这场</button></div>';
+      }
+    }
+    html += '<div class="block-hd" style="margin-top:6px"><h3>本场数据</h3>' + (admin ? '<span class="block-sub" id="m_add">＋ 录入</span>' : '') + '</div>';
+    html += '<div id="m_events">' + eventsHtml(id, admin) + '</div>';
+
+    openSheet('比赛详情', html, () => {
+      if (admin) {
+        segBind('#m_side', '#m_side'); segBind('#m_status', '#m_status'); segBind('#m_comp');
+        $('#m_save').onclick = async () => {
+          try {
+            const patch = {
+              opponent: $('#m_opp').value.trim(), match_date: toISO($('#m_date').value),
+              season: $('#m_season').value.trim(), round: $('#m_round').value.trim(),
+              competition: $('#m_comp button.on') ? $('#m_comp button.on').dataset.v : (m.competition || '联赛'),
+              is_home: $('#m_side button.on').dataset.v === '1',
+              venue_id: $('#m_venue').value || null,
+              our_score: $('#m_ourscore').value === '' ? null : Number($('#m_ourscore').value),
+              opp_score: $('#m_oppscore').value === '' ? null : Number($('#m_oppscore').value),
+              status: $('#m_status button.on').dataset.v, remark: $('#m_remark').value.trim()
+            };
+            await Store.update('matches', m.id, patch);
+            closeSheet(); refresh('已保存');
+          } catch (e) { toast('保存失败：' + e.message); }
+        };
+        $('#m_del').onclick = async () => {
+          if (!confirm('确定删除这场比赛？相关进球/助攻数据也会移除')) return;
+          await Store.removeWhere('events', 'match_id', m.id);
+          await Store.remove('matches', m.id);
+          closeSheet(); refresh('已删除');
+        };
+        $('#m_add').onclick = () => openEvent(m.id);
+      }
+      bindEventDel(id);
+      if ($('#m_mydel')) $('#m_mydel').onclick = async () => {
+        if (!confirm('删除这场比赛？其进球/助攻数据也会一起移除。')) return;
+        await Store.removeWhere('events', 'match_id', id);
+        await Store.remove('matches', id);
+        closeSheet(); refresh('已删除');
+      };
+    });
+  }
+
+  function eventsHtml(mid, admin) {
+    const evs = ST.events.filter(e => e.match_id === mid);
+    if (!evs.length) return '<div class="empty" style="padding:14px 0">暂无比赛数据</div>';
+    const order = ['goal', 'assist', 'shoot', 'yellow', 'red'];
+    evs.sort((a, b) => {
+      const ia = order.indexOf(a.type), ib = order.indexOf(b.type);
+      return (ia < 0 ? 9 : ia) - (ib < 0 ? 9 : ib) || (Number(a.minute) || 0) - (Number(b.minute) || 0);
+    });
+    return evs.map(e => {
+      const p = playerById(e.player_id);
+      const meta = EV_TYPES[e.type] || { name: e.type };
+      const cls = { goal: '', assist: 'a', shoot: 's', yellow: 'y', red: 'r' }[e.type] || '';
+      const tag = (e.type === 'goal' && e.is_penalty) ? '<i class="ptag">点</i>' : '';
+      return '<div class="ev"><div class="ev-b ' + cls + '">' + meta.name + '</div>' +
+        '<div class="ev-m">' + esc(p ? p.name : '未知球员') + tag +
+        '<small>' + (e.count || 1) + ' ' + (meta.unit || '次') + (e.minute ? ' · ' + e.minute + "'" : '') + '</small></div>' +
+        (admin ? '<button class="ev-x" data-eid="' + esc(e.id) + '">✕</button>' : '') + '</div>';
+    }).join('');
+  }
+  function bindEventDel(mid) {
+    $$('#m_events .ev-x').forEach(b => b.onclick = async () => {
+      await Store.remove('events', b.dataset.eid);
+      ST.events = ST.events.filter(e => e.id !== b.dataset.eid);
+      $('#m_events').innerHTML = eventsHtml(mid, true); bindEventDel(mid);
+      refresh();
+    });
+  }
+  function segBind(sel) {
+    $$(sel + ' button').forEach(b => b.onclick = () => {
+      $$(sel + ' button').forEach(x => x.classList.remove('on')); b.classList.add('on');
+    });
+  }
+
+  function openMatchNew() {
+    if (!requireAdmin()) return;
+    const vOpts = ST.venues.map(v => '<option value="' + esc(v.id) + '">' + esc(v.name) + '</option>').join('');
+    const d = new Date(Date.now() + 3 * 86400000); d.setHours(19, 30, 0, 0);
+    openSheet('添加比赛',
+      '<div class="fld"><label>对手</label><input class="ipt" id="m_opp" placeholder="对手队名"></div>' +
+      '<div class="fld"><label>比赛时间</label><input class="ipt" type="datetime-local" id="m_date" value="' + toLocalInput(d.toISOString()) + '"></div>' +
+      '<div class="row2"><div class="fld"><label>赛季</label><input class="ipt" id="m_season" value="' + (new Date().getFullYear()) + '"></div>' +
+      '<div class="fld"><label>轮次</label><input class="ipt" id="m_round" placeholder="如 第1轮"></div></div>' +
+      '<div class="fld"><label>赛事</label><div class="seg five" id="m_comp">' +
+      COMPS.map((c, i) => '<button data-v="' + esc(c) + '"' + (i === 0 ? ' class="on"' : '') + '>' + esc(c) + '</button>').join('') +
+      '</div></div>' +
+      '<div class="fld"><label>主客场</label><div class="seg" id="m_side"><button data-v="1" class="on">主场</button><button data-v="0">客场</button></div></div>' +
+      '<div class="fld"><label>场地</label><select class="ipt" id="m_venue"><option value="">未指定</option>' + vOpts + '</select></div>' +
+      '<div class="fld"><label>状态</label><div class="seg" id="m_status"><button data-v="upcoming" class="on">未开始</button><button data-v="finished">已结束</button><button data-v="cancelled">已取消</button></div></div>' +
+      '<div class="fld"><label>备注</label><input class="ipt" id="m_remark"></div>' +
+      '<div class="acts"><button class="btn" id="m_save">添加</button></div>', () => {
+        segBind('#m_side'); segBind('#m_status'); segBind('#m_comp');
+        $('#m_save').onclick = async () => {
+          const opp = $('#m_opp').value.trim();
+          if (!opp) return toast('请填写对手');
+          await Store.insert('matches', {
+            opponent: opp, match_date: toISO($('#m_date').value), season: $('#m_season').value.trim(),
+            round: $('#m_round').value.trim(), competition: $('#m_comp button.on').dataset.v,
+            is_home: $('#m_side button.on').dataset.v === '1',
+            venue_id: $('#m_venue').value || null, our_score: null, opp_score: null,
+            status: $('#m_status button.on').dataset.v, remark: $('#m_remark').value.trim()
+          });
+          closeSheet(); refresh('比赛已添加');
+        };
+      });
+  }
+
+  function openEvent(mid) {
+    if (!ST.players.length) return toast('请先在「球员」中添加球员');
+    const pOpts = ST.players.map(p => '<option value="' + esc(p.id) + '">#' + esc(p.number || '-') + ' ' + esc(p.name) + '</option>').join('');
+    const tBtns = ['goal', 'assist', 'shoot', 'yellow', 'red'].map((k, i) =>
+      '<button data-v="' + k + '"' + (i === 0 ? ' class="on"' : '') + '>' + EV_TYPES[k].name + '</button>').join('');
+    openSheet('录入本场数据',
+      '<div class="fld"><label>球员</label><select class="ipt" id="e_p">' + pOpts + '</select></div>' +
+      '<div class="fld"><label>类型</label><div class="seg five" id="e_t">' + tBtns + '</div></div>' +
+      '<div class="fld" id="e_penwrap"><label>是否点球</label><div class="seg" id="e_pen"><button data-v="0" class="on">否</button><button data-v="1">是（点球）</button></div></div>' +
+      '<div class="row2"><div class="fld"><label>次数</label><input class="ipt" type="number" id="e_c" value="1" min="1"></div>' +
+      '<div class="fld"><label>分钟（可留空）</label><input class="ipt" type="number" id="e_m" placeholder="如 68"></div></div>' +
+      '<div class="acts"><button class="btn" id="e_save">添加</button></div>', () => {
+        segBind('#e_t'); segBind('#e_pen');
+        const syncPen = () => {
+          const t = $('#e_t button.on').dataset.v;
+          $('#e_penwrap').style.display = t === 'goal' ? '' : 'none';
+        };
+        $$('#e_t button').forEach(b => b.onclick = () => {
+          $$('#e_t button').forEach(x => x.classList.remove('on')); b.classList.add('on'); syncPen();
+        });
+        syncPen();
+        $('#e_save').onclick = async () => {
+          try {
+            const t = $('#e_t button.on').dataset.v;
+            await Store.insert('events', {
+              match_id: mid, player_id: $('#e_p').value, type: t,
+              count: Number($('#e_c').value) || 1, minute: $('#e_m').value ? Number($('#e_m').value) : null,
+              is_penalty: t === 'goal' && $('#e_pen button.on').dataset.v === '1'
+            });
+            await refresh();
+            closeSheet(); openMatch(mid); toast('已录入');
+          } catch (e) { toast('录入失败：' + e.message); }
+        };
+      });
+  }
+
+  /* ---------------- 球员 ---------------- */
+  function playerForm(p, isNew) {
+    return '<div class="fld"><label>姓名</label><input class="ipt" id="p_name" value="' + esc(p.name || '') + '"></div>' +
+      '<div class="row2"><div class="fld"><label>号码</label><input class="ipt" type="number" id="p_num" value="' + esc(p.number == null ? '' : p.number) + '"></div>' +
+      '<div class="fld"><label>位置</label><input class="ipt" id="p_pos" value="' + esc(p.position || '') + '" placeholder="前锋/中场/后卫/门将"></div></div>' +
+      '<div class="fld"><label>联系电话（可留空）</label><input class="ipt" id="p_phone" value="' + esc(p.phone || '') + '"></div>' +
+      '<div class="fld"><label>入队日期</label><input class="ipt" type="date" id="p_join" value="' + esc(p.joined_at || '') + '"></div>' +
+      '<div class="fld"><label>头像</label><div class="row2"><div><input class="ipt" id="p_avatar" placeholder="图片网址" value="' + esc((p.avatar_url || '').slice(0, 30) === 'data:image' ? '' : (p.avatar_url || '')) + '"></div>' +
+      '<div><input type="file" accept="image/*" id="p_file" class="ipt" style="padding:7px 8px;font-size:12px"></div></div></div>' +
+      '<div class="fld"><label>状态</label><div class="seg" id="p_act"><button data-v="1" class="' + (p.active === false ? '' : 'on') + '">在队</button><button data-v="0" class="' + (p.active === false ? 'on' : '') + '">离队</button></div></div>' +
+      (isNew ? '<div class="acts"><button class="btn" id="p_save">添加球员</button></div>'
+        : '<div class="acts"><button class="btn" id="p_save">保存</button><button class="btn red" id="p_del">删除</button></div>');
+  }
+  function bindAvatarPicker() {
+    const f = $('#p_file'); if (!f) return;
+    f.onchange = () => {
+      const file = f.files[0]; if (!file) return;
+      const img = new Image(); const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const size = 256, c = document.createElement('canvas'); c.width = c.height = size;
+        const ctx = c.getContext('2d');
+        const s = Math.min(img.width, img.height), sx = (img.width - s) / 2, sy = (img.height - s) / 2;
+        ctx.drawImage(img, sx, sy, s, s, 0, 0, size, size);
+        $('#p_avatar').value = c.toDataURL('image/jpeg', 0.78);
+        URL.revokeObjectURL(url); toast('头像已读取，点保存生效');
+      };
+      img.src = url;
+    };
+  }
+  function openPlayerNew() {
+    if (!requireAdmin()) return;
+    openSheet('添加球员', playerForm({ active: true }, true), () => {
+      segBind('#p_act'); bindAvatarPicker();
+      $('#p_save').onclick = async () => {
+        const n = $('#p_name').value.trim(); if (!n) return toast('请填写姓名');
+        await Store.insert('players', {
+          name: n, number: $('#p_num').value === '' ? null : Number($('#p_num').value),
+          position: $('#p_pos').value.trim(), phone: $('#p_phone').value.trim(),
+          avatar_url: $('#p_avatar').value.trim(), joined_at: $('#p_join').value,
+          active: $('#p_act button.on').dataset.v === '1'
+        });
+        closeSheet(); refresh('球员已添加');
+      };
+    });
+  }
+  function openPlayer(id) {
+    const p = playerById(id); if (!p) return;
+    if (!canEdit()) {
+      const g = board('goal').find(x => x.p.id === id), a = board('assist').find(x => x.p.id === id);
+      const app = board('app').find(x => x.p.id === id);
+      return openSheet('球员资料',
+        '<div style="text-align:center;padding:8px 0 14px">' + avatarHtml(p.name, p.avatar_url, 'c-av', p.number).replace('class="c-av c-num"', 'class="c-av c-num" style="width:76px;height:76px;font-size:22px;margin:0 auto"') + '</div>' +
+        '<div class="club-stats" style="border:1px solid var(--line);border-radius:12px;padding:12px;background:#fff;color:var(--txt)">' +
+        '<div class="st"><b style="color:var(--navy)">' + (g ? g.v : 0) + '</b><span>进球</span></div>' +
+        '<div class="st"><b style="color:var(--navy)">' + (a ? a.v : 0) + '</b><span>助攻</span></div>' +
+        '<div class="st"><b style="color:var(--navy)">' + (app ? app.v : 0) + '</b><span>出场</span></div></div>' +
+        '<div class="note" style="margin-top:12px">姓名：' + esc(p.name) + '<br>号码：' + esc(p.number || '-') + '<br>位置：' + esc(p.position || '-') +
+        '<br>入队：' + esc(p.joined_at || '-') + '</div>');
+    }
+    openSheet('编辑球员', playerForm(p, false), () => {
+      segBind('#p_act'); bindAvatarPicker();
+      $('#p_save').onclick = async () => {
+        await Store.update('players', id, {
+          name: $('#p_name').value.trim(), number: $('#p_num').value === '' ? null : Number($('#p_num').value),
+          position: $('#p_pos').value.trim(), phone: $('#p_phone').value.trim(),
+          avatar_url: $('#p_avatar').value.trim(), joined_at: $('#p_join').value,
+          active: $('#p_act button.on').dataset.v === '1'
+        });
+        closeSheet(); refresh('已保存');
+      };
+      $('#p_del').onclick = async () => {
+        if (!confirm('确定删除该球员？其进球/助攻记录也会移除')) return;
+        await Store.removeWhere('events', 'player_id', id);
+        await Store.remove('players', id);
+        closeSheet(); refresh('已删除');
+      };
+    });
+  }
+
+  /* ---------------- 场地 ---------------- */
+  function venueForm(v, isNew) {
+    return '<div class="fld"><label>场地名称</label><input class="ipt" id="v_name" value="' + esc(v.name || '') + '"></div>' +
+      '<div class="fld"><label>地址</label><input class="ipt" id="v_addr" value="' + esc(v.address || '') + '"></div>' +
+      '<div class="row2"><div class="fld"><label>草坪类型</label><select class="ipt" id="v_surf">' +
+      ['人造草', '天然草', '室内场', '土场'].map(s => '<option' + (v.surface === s ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></div>' +
+      '<div class="fld"><label>价格（元/场）</label><input class="ipt" type="number" id="v_price" value="' + esc(v.price == null ? '' : v.price) + '"></div></div>' +
+      '<div class="fld"><label>联系人 / 电话</label><input class="ipt" id="v_contact" value="' + esc(v.contact || '') + '"></div>' +
+      '<div class="fld"><label>导航链接（可留空）</label><input class="ipt" id="v_map" placeholder="高德/百度地图分享链接" value="' + esc(v.map_url || '') + '"></div>' +
+      '<div class="fld"><label>备注</label><textarea class="ipt" id="v_remark" rows="3">' + esc(v.remark || '') + '</textarea></div>' +
+      (isNew ? '<div class="acts"><button class="btn" id="v_save">添加场地</button></div>'
+        : '<div class="acts"><button class="btn" id="v_save">保存</button><button class="btn red" id="v_del">删除</button></div>');
+  }
+  function openVenueNew() {
+    if (!requireAdmin()) return;
+    openSheet('添加场地', venueForm({}, true), () => {
+      $('#v_save').onclick = async () => {
+        const n = $('#v_name').value.trim(); if (!n) return toast('请填写场地名称');
+        await Store.insert('venues', {
+          name: n, address: $('#v_addr').value.trim(), surface: $('#v_surf').value,
+          price: $('#v_price').value === '' ? null : Number($('#v_price').value),
+          contact: $('#v_contact').value.trim(), map_url: $('#v_map').value.trim(), remark: $('#v_remark').value.trim()
+        });
+        closeSheet(); refresh('场地已添加');
+      };
+    });
+  }
+  function openVenue(id) {
+    const v = venueById(id); if (!v) return;
+    if (!canEdit()) {
+      return openSheet('场地详情',
+        '<div class="note">名称：' + esc(v.name) + '<br>地址：' + esc(v.address || '-') + '<br>类型：' + esc(v.surface || '-') +
+        '<br>价格：' + (v.price != null ? '¥' + esc(v.price) + '/场' : '-') + '<br>联系：' + esc(v.contact || '-') +
+        (v.remark ? '<br>备注：' + esc(v.remark) : '') + '</div>' +
+        (v.map_url ? '<a class="btn wide" style="text-align:center;line-height:38px;text-decoration:none" href="' + esc(v.map_url) + '" target="_blank" rel="noopener">打开导航</a>' : ''));
+    }
+    openSheet('编辑场地', venueForm(v, false), () => {
+      $('#v_save').onclick = async () => {
+        await Store.update('venues', id, {
+          name: $('#v_name').value.trim(), address: $('#v_addr').value.trim(), surface: $('#v_surf').value,
+          price: $('#v_price').value === '' ? null : Number($('#v_price').value),
+          contact: $('#v_contact').value.trim(), map_url: $('#v_map').value.trim(), remark: $('#v_remark').value.trim()
+        });
+        closeSheet(); refresh('已保存');
+      };
+      $('#v_del').onclick = async () => {
+        if (!confirm('确定删除该场地？')) return;
+        await Store.remove('venues', id);
+        closeSheet(); refresh('已删除');
+      };
+    });
+  }
+
+  /* ---------------- 管理 / 登录面板 ---------------- */
+  function openAdmin() {
+    if (ST.role === 'admin') { return openAdminPanel(); }
+    if (ST.role === 'recorder') { return openRecorderPanel(); }
+    /* 未登录：登录表单，自动识别身份 */
+    openSheet('登录',
+      '<div class="note">两种账号：<br>' +
+      '· <b>管理员</b>：管球队资料、球员、场地、赛程，也能录比赛<br>' +
+      '· <b>录入员</b>：只有一个「录入」界面，专门录比赛数据<br>' +
+      '不登录时为只读浏览模式。</div>' +
+      '<div class="fld"><label>账号</label><input class="ipt" id="l_user" placeholder="账号" autocomplete="username"></div>' +
+      '<div class="fld"><label>密码</label><input class="ipt" type="password" id="l_pass" placeholder="密码" autocomplete="current-password"></div>' +
+      '<div class="acts"><button class="btn" id="l_go">登录</button></div>', () => {
+        $('#l_go').onclick = () => {
+          const u = $('#l_user').value.trim(), p = $('#l_pass').value;
+          const A = APP_CONFIG.admin, R = APP_CONFIG.recorder;
+          if (u === A.user && p === A.pass) {
+            setLogin('admin', u); closeSheet(); renderNav(); renderAll();
+            toast('管理员登录成功'); openAdminPanel();
+          } else if (u === R.user && p === R.pass) {
+            setLogin('recorder', u); closeSheet(); renderNav(); renderAll();
+            go('record'); toast('录入员登录成功，可直接录入');
+          } else toast('账号或密码不正确');
+        };
+        $('#l_pass').onkeydown = e => { if (e.key === 'Enter') $('#l_go').click(); };
+      });
+  }
+
+  /* 管理员后台 */
+  function openAdminPanel() {
+    const mode = Store.isCloud()
+      ? '<span class="badge">云端已连接</span>'
+      : '<span class="badge warn">本机模式</span>';
+    const srcTxt = { url: '来自分享链接', saved: '来自本机配置', config: '来自 config.js', none: '未配置' }[Store.source] || '';
+    openSheet('管理后台',
+      '<div class="admin-item"><div class="ai-l"><b>管理员</b><small>' + esc(APP_CONFIG.admin.user) + ' · 已登录</small></div><button class="btn sm ghost" id="a_logout">退出</button></div>' +
+      '<div class="admin-item"><div class="ai-l"><b>数据存储</b><small>' + (Store.isCloud() ? 'Supabase 云数据库，多设备自动同步' : '仅保存在本机浏览器，换设备不同步') + (Store.isCloud() ? ' · ' + srcTxt : '') + '</small></div>' + mode + '</div>' +
+      '<div style="margin-top:12px"><button class="btn wide" id="a_profile">✏️ 编辑球队介绍</button></div>' +
+      '<div style="margin-top:9px"><button class="btn wide ' + (Store.isCloud() ? 'ghost' : 'gold') + '" id="a_connect">' + (Store.isCloud() ? '☁️ 云端设置 / 生成分享链接' : '☁️ 连接云端数据库') + '</button></div>' +
+      '<div style="margin-top:9px"><button class="btn wide ghost" id="a_export">📤 导出备份（JSON）</button></div>' +
+      '<div style="margin-top:9px"><button class="btn wide ghost" id="a_import">📥 导入备份</button></div>' +
+      '<div style="margin-top:9px"><button class="btn wide ghost" id="a_fix">🔧 检查云端表结构</button></div>' +
+      '<div style="margin-top:9px"><button class="btn wide ghost" id="a_install">📱 安装到手机桌面</button></div>' +
+      '<div style="margin-top:9px"><button class="btn wide ghost" id="a_cloud">☁️ 云端配置指引</button></div>' +
+      '<div style="margin-top:9px"><button class="btn wide red" id="a_clear">🗑 清空全部数据</button></div>' +
+      '<div class="note" style="margin-top:14px">提示：截图请在首页点击右上角 📷；录入员账号 <b>' + esc(APP_CONFIG.recorder.user) + '</b> 登录后只能进「录入」页。</div>', () => {
+        $('#a_logout').onclick = () => { logout(); closeSheet(); renderNav(); go('home'); renderAll(); toast('已退出'); };
+        $('#a_profile').onclick = () => { closeSheet(); openProfile(); };
+        $('#a_connect').onclick = () => { closeSheet(); openCloudSetup(); };
+        $('#a_export').onclick = async () => {
+          const data = await Store.exportAll();
+          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = '狮山实达数据备份-' + new Date().toISOString().slice(0, 10) + '.json';
+          a.click(); toast('已导出');
+        };
+        $('#a_import').onclick = () => {
+          const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,application/json';
+          inp.onchange = async () => {
+            const f = inp.files[0]; if (!f) return;
+            try {
+              const txt = await f.text();
+              await Store.importAll(JSON.parse(txt));
+              closeSheet(); refresh('导入成功');
+            } catch (e) { toast('导入失败：' + e.message); }
+          };
+          inp.click();
+        };
+        $('#a_install').onclick = () => { closeSheet(); openInstall(); };
+        $('#a_fix').onclick = async () => {
+          if (!Store.isCloud()) { closeSheet(); return openCloudGuide(); }
+          const b = $('#a_fix'); const old = b.textContent; b.textContent = '检查中…'; b.disabled = true;
+          try {
+            const miss = await Store.checkSchema();
+            b.textContent = old; b.disabled = false;
+            if (!miss.length) { closeSheet(); return openSheet('表结构检查', '<div class="note"><b style="color:#0E9F6E">✅ 表结构正常</b><br>所有字段齐全，可以正常保存数据。</div>'); }
+            const TYPES = {
+              competition: 'text', created_by: 'text', season: 'text', round: 'text', remark: 'text',
+              address: 'text', surface: 'text', contact: 'text', map_url: 'text',
+              name: 'text', slogan: 'text', founded: 'text', home_venue: 'text', logo_url: 'text', intro: 'text',
+              position: 'text', phone: 'text', avatar_url: 'text', joined_at: 'date',
+              match_id: 'uuid', player_id: 'uuid', venue_id: 'uuid', type: 'text',
+              count: 'int', minute: 'int', number: 'int', our_score: 'int', opp_score: 'int', price: 'numeric',
+              status: 'text', is_home: 'boolean', active: 'boolean', is_penalty: 'boolean'
+            };
+            const uniq = {};
+            miss.forEach(([t, c]) => { (uniq[t] = uniq[t] || []).push(c); });
+            const sql = Object.keys(uniq).map(t =>
+              uniq[t].map(c => 'alter table public.' + t + ' add column if not exists ' + c + ' ' + (TYPES[c] || 'text') + ';').join('\n')
+            ).join('\n') + '\n\n-- ⚠️ 跑完上面这段后，务必再执行下面这句刷新 PostgREST 缓存，否则仍会报同样的错：\nnotify pgrst, \'reload schema\';';
+            closeSheet();
+            openSheet('云端表缺少字段',
+              '<div class="note" style="background:#FFF6E0;border-color:#F5E3B0;color:#8A6212">' +
+              '<b>缺少 ' + miss.length + ' 个字段</b>，这就是保存失败的原因。</div>' +
+              '<div class="note"><b>修复方法（2 步）</b><br>' +
+              '1. Supabase 控制台 → <b>SQL Editor</b> → New query，粘贴下面这段 → <b>Run</b><br>' +
+              '2. 再到 <b>Settings → API</b>，点一下 <b>Reload schema cache</b>（刷新缓存，否则仍会报错）</div>' +
+              '<div class="code" id="fixsql">' + esc(sql) + '</div>' +
+              '<div class="acts"><button class="btn" id="fx_copy">复制 SQL</button><button class="btn ghost" id="fx_recheck">重新检查</button></div>', () => {
+                $('#fx_copy').onclick = async () => {
+                  const t = $('#fixsql');
+                  let ok = false;
+                  try { t.select(); ok = document.execCommand('copy'); } catch (e) { }
+                  if (!ok && navigator.clipboard) { try { await navigator.clipboard.writeText(sql); ok = true; } catch (e) { } }
+                  toast(ok ? '已复制，去 SQL Editor 粘贴运行' : '请手动选中复制');
+                };
+                $('#fx_recheck').onclick = () => { closeSheet(); openAdmin(); $('#a_fix').click(); };
+              });
+          } catch (e) {
+            b.textContent = old; b.disabled = false; toast('检查失败：' + (e.message || e));
+          }
+        };
+        $('#a_cloud').onclick = () => { closeSheet(); openCloudGuide(); };
+        $('#a_clear').onclick = async () => {
+          if (!confirm('将清空球员、场地、赛程与全部比赛数据，且不可恢复！建议先导出备份。确定继续？')) return;
+          if (!confirm('再次确认：真的要清空吗？')) return;
+          await Store.clearAll(); closeSheet(); refresh('数据已清空');
+        };
+      });
+  }
+
+  /* 录入员面板 */
+  function openRecorderPanel() {
+    const mine = ST.matches.filter(m => m.created_by === ST.user).length;
+    openSheet('录入员',
+      '<div class="admin-item"><div class="ai-l"><b>录入员</b><small>' + esc(ST.user || APP_CONFIG.recorder.user) + ' · 已登录</small></div><button class="btn sm ghost" id="r_logout">退出</button></div>' +
+      '<div class="admin-item"><div class="ai-l"><b>已录入</b><small>由你录入的比赛</small></div><span class="badge">' + mine + ' 场</span></div>' +
+      '<div style="margin-top:12px"><button class="btn wide gold" id="r_rec">📝 录入一场比赛</button></div>' +
+      '<div style="margin-top:9px"><button class="btn wide ghost" id="r_install">📱 安装到手机桌面</button></div>' +
+      '<div class="note" style="margin-top:14px">录入只需填：日期、场地、对手、比分，以及谁进了球、谁助攻了。球员名单由管理员维护，如需新增请联系管理员。</div>', () => {
+        $('#r_logout').onclick = () => { logout(); closeSheet(); renderNav(); go('home'); renderAll(); toast('已退出'); };
+        $('#r_rec').onclick = () => { closeSheet(); go('record'); };
+        $('#r_install').onclick = () => { closeSheet(); openInstall(); };
+      });
+  }
+
+  function openInstall() {
+    openSheet('安装到手机桌面',
+      '<div class="note"><b>iPhone（Safari）</b><br>1. 用 Safari 打开本页<br>2. 点击底部「分享」按钮 <b>⬆️</b><br>3. 选择「添加到主屏幕」<br>4. 确认后桌面出现图标，点开即全屏运行，和 App 一样</div>' +
+      '<div class="note"><b>安卓（Chrome / 夸克 /  Edge）</b><br>1. 打开本页后点击右上角菜单 <b>⋮</b><br>2. 选择「添加到主屏幕 / 安装应用」<br>3. 确认即可</div>' +
+      '<div class="note"><b>多人共享</b><br>把网址发给队友，所有人打开看到的都是同一份云端数据；只有输入管理密码的人才能修改。</div>' +
+      '<div style="margin-top:8px"><button class="btn wide" id="i_try">' + (deferredPrompt ? '一键安装' : '已支持添加到桌面') + '</button></div>', () => {
+        $('#i_try').onclick = async () => {
+          if (!deferredPrompt) return toast('请按上方步骤在浏览器菜单中添加');
+          deferredPrompt.prompt(); const r = await deferredPrompt.userChoice; deferredPrompt = null;
+          if (r && r.outcome === 'accepted') toast('已添加到桌面');
+        };
+      });
+  }
+
+  function openCloudGuide() {
+    openSheet('云端配置指引',
+      '<div class="note">当前：<b>' + (Store.isCloud() ? '已连接 Supabase 云端数据库' : '本机模式（数据只存在这台设备）') + '</b></div>' +
+      '<div class="note"><b>准备云端数据库（只需做一次）</b><br>' +
+      '1. 打开 supabase.com 注册免费账号，新建一个 Project<br>' +
+      '2. 左侧 <b>SQL Editor</b> → New query，粘贴运行建表脚本 <b>schema.sql</b><br>' +
+      '3. 左下角 <b>Settings（齿轮）→ API</b>，复制 Project URL 和 publishable / anon public key<br>' +
+      '4. 回到本页，把两串粘进去即可（不用改代码文件）</div>' +
+      '<div class="note">免费额度足够一支业余球队长期使用，无需付费，也不需要服务器。</div>' +
+      '<div style="margin-top:8px"><button class="btn wide gold" id="g_go">去填写 URL 和 Key</button></div>', () => {
+        $('#g_go').onclick = () => { closeSheet(); openCloudSetup(); };
+      });
+  }
+
+  /* 在界面里直接连接云端，无需修改代码文件 */
+  function openCloudSetup() {
+    const c = Store.cfg || { url: '', anonKey: '' };
+    const on = Store.isCloud();
+    const link = Store.shareLink();
+    const localN = Store.localCounts().total;
+    openSheet('连接云端数据库',
+      '<div class="note">' + (on
+        ? '<b style="color:#0E9F6E">已连接云端</b>，所有设备共用同一份数据。'
+        : '当前为<b>本机模式</b>，数据只存在这台设备。连云端后全队实时共享。') + '</div>' +
+      '<div class="fld"><label>Project URL</label><input class="ipt" id="c_url" placeholder="https://abcdefgh.supabase.co" value="' + esc(c.url || '') + '"></div>' +
+      '<div class="fld"><label>Publishable / anon public key</label><input class="ipt" id="c_key" placeholder="sb_publishable_... 或 eyJhbGciOi..." value="' + esc(c.anonKey || '') + '"></div>' +
+      '<div class="acts"><button class="btn" id="c_save">连接并保存</button>' + (on ? '<button class="btn red" id="c_off">断开</button>' : '') + '</div>' +
+      (on && localN ? '<div style="margin-top:14px"><button class="btn wide gold" id="c_mig">⬆️ 把本机 ' + localN + ' 条数据上传到云端</button></div>' +
+        '<div class="note" style="margin-top:6px">连云端后 App 只显示云端数据。如果你之前在本机录过数据，点这里一次搬上去（云端已有数据的表会自动跳过）。</div>' : '') +
+      (on && link && Store.shareIsLocal() ? '<div class="note" style="margin-top:14px;background:#FFF6E0;border-color:#F5E3B0;color:#8A6212">' +
+        '<b>⚠️ 现在是「本机打开」，还不能发给队友</b><br>' +
+        '当前页面地址是 ' + (String(location.protocol).toLowerCase() === 'file:' ? '你电脑上的本地文件（file://）' : '本机 localhost') +
+        '，队友点开只会打开他们自己电脑上的文件，或者根本打不开。<br><br>' +
+        '<b>要分享，先把文件夹传到一个网址上</b>（约 30 秒）：<br>' +
+        '1. 打开 <b>app.netlify.com/drop</b>（或 vercel.com）<br>' +
+        '2. 把 <b>sclh-app 整个文件夹</b>拖进网页虚线框里<br>' +
+        '3. 几十秒后得到一个 https://xxx.netlify.app 网址<br>' +
+        '4. 用那个网址打开本 App，再来这里生成分享链接，就能发给队友了</div>' : '') +
+      (on && link && !Store.shareIsLocal() ? '<div class="fld" style="margin-top:14px"><label>队友专用链接（点开自动连好同一个库）</label>' +
+        '<textarea class="ipt" id="c_link" rows="3" readonly>' + esc(link) + '</textarea></div>' +
+        '<div class="acts"><button class="btn ghost" id="c_copy">复制链接发给队友</button></div>' +
+        '<div class="note" style="margin-top:6px">这条链接里含数据库地址与 key，<b>只发球队群，别发到公开场合</b>。</div>' : '') +
+      '<div class="note" style="margin-top:14px"><b>去哪里找这两串？</b><br>' +
+      'Supabase 控制台 → 打开你的项目 → 左下角 <b>Settings（齿轮）</b> → <b>API</b>（或 API Keys）<br>' +
+      '· <b>Project URL</b>：形如 https://abcdefgh.supabase.co<br>' +
+      '· <b>API Keys</b>：复制 label 为 <b>publishable</b>（新版）或 <b>anon public</b>（旧版）的那一个<br>' +
+      '<b style="color:#E02424">不要复制 service_role / sb_secret_ 开头的那个。</b><br><br>' +
+      '<b>第一次连接前</b>，需先在 Supabase 左侧 <b>SQL Editor</b> 里运行一次建表脚本 schema.sql，否则会提示连接失败。</div>', () => {
+        $('#c_save').onclick = async () => {
+          const b = $('#c_save'); const old = b.textContent; b.textContent = '连接中…'; b.disabled = true;
+          try {
+            await Store.connectCloud($('#c_url').value, $('#c_key').value);
+            await refresh();
+            closeSheet(); toast('云端已连接'); openCloudSetup();
+          } catch (e) {
+            toast(e.message || '连接失败'); b.textContent = old; b.disabled = false;
+          }
+        };
+        if ($('#c_off')) $('#c_off').onclick = async () => {
+          if (!confirm('断开云端？将回到本机模式（云端数据不会丢失）。')) return;
+          Store.disconnectCloud(); await refresh(); closeSheet(); toast('已断开云端'); openCloudSetup();
+        };
+        if ($('#c_mig')) $('#c_mig').onclick = async () => {
+          if (!confirm('把本机数据上传到云端？（云端已有的表会跳过）')) return;
+          const b = $('#c_mig'); const old = b.textContent; b.textContent = '上传中…'; b.disabled = true;
+          try {
+            const n = await Store.migrateLocalToCloud();
+            await refresh(); closeSheet(); toast('已上传 ' + n + ' 条'); openCloudSetup();
+          } catch (e) { toast('上传失败：' + (e.message || e)); b.textContent = old; b.disabled = false; }
+        };
+        if ($('#c_copy')) $('#c_copy').onclick = async () => {
+          const t = $('#c_link'); t.select(); t.setSelectionRange(0, 99999);
+          let ok = false;
+          try { ok = document.execCommand('copy'); } catch (e) { }
+          if (!ok && navigator.clipboard) { try { await navigator.clipboard.writeText(t.value); ok = true; } catch (e) { } }
+          toast(ok ? '已复制，发给队友即可' : '请手动长按复制');
+        };
+      });
+  }
+
+  /* ---------------- 一键截图（Canvas 自绘海报） ---------------- */
+  let shotBlob = null;
+
+  /* 组装海报数据 */
+  function shotData() {
+    const p = ST.profile || DEFAULT_PROFILE;
+    const r = record();
+    const COMP_COLOR = { '联赛': '#1D4ED8', '杯赛': '#7C3AED', '友谊赛': '#0E9F6E', '内部赛': '#C89204' };
+
+    /* 近期赛程：未来 2 场 + 最近 2 场 */
+    const up = ST.matches.filter(m => m.status === 'upcoming')
+      .sort((a, b) => new Date(a.match_date || 9e15) - new Date(b.match_date || 9e15)).slice(0, 2);
+    const list = up.concat(finishedMatches().slice(0, 2));
+    const fixtures = list.map(m => {
+      const db = dayBlock(m.match_date);
+      const fin = m.status === 'finished';
+      let score = '未开始', sc = '#8E9AAE', state = '';
+      if (fin) {
+        const a = Number(m.our_score) || 0, b = Number(m.opp_score) || 0;
+        score = a + ' : ' + b;
+        sc = a > b ? '#0E9F6E' : a < b ? '#E02424' : '#8E9AAE';
+        state = '已结束';
+      } else if (m.status === 'cancelled') { score = '取消'; state = '已取消'; }
+      else { state = db.t || '待定'; }
+      return {
+        d: db.d, m: db.m, opp: m.opponent || '待定对手', home: !!m.is_home,
+        comp: m.competition || '', compColor: COMP_COLOR[m.competition] || '#1D4ED8',
+        score: score, scoreColor: sc, state: state
+      };
+    });
+
+    /* 榜单 */
+    const toRows = arr => arr.slice(0, 5).map(x => ({
+      name: x.p.name, number: x.p.number, position: x.p.position,
+      avatar: x.p.avatar_url, v: x.v
+    }));
+    const goals = toRows(board('goal'));
+    const assists = toRows(board('assist'));
+
+    /* 近况小球 */
+    const recent = finishedMatches().slice(0, 6).map(m => {
+      const a = Number(m.our_score) || 0, b = Number(m.opp_score) || 0;
+      return { cls: a > b ? 'w' : a < b ? 'l' : 'd', t: a > b ? '胜' : a < b ? '负' : '平' };
+    });
+
+    const d = new Date();
+    return {
+      profile: p,
+      stats: [
+        { v: String(r.n), k: '已赛' },
+        { v: String(r.pts), k: '积分' },
+        { v: String(r.gf), k: '进球' },
+        { v: (r.gd > 0 ? '+' : '') + r.gd, k: '净胜球' },
+        { v: String(ST.players.filter(x => x.active !== false).length), k: '在队' }
+      ],
+      recent: recent,
+      rate: r.rate,
+      fixtures: fixtures,
+      fixtureSub: '共 ' + ST.matches.length + ' 场',
+      goals: goals,
+      assists: assists,
+      date: d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+    };
+  }
+
+  async function doShot() {
+    const btn = $('#btnShot'); btn.textContent = '⏳';
+    try {
+      if (!global.Poster) throw new Error('海报模块未加载');
+      const d = shotData();
+      /* 先预加载头像（网络图可能慢），最多等 2.5 秒 */
+      const urls = [];
+      (d.goals || []).concat(d.assists || []).forEach(r => { if (r.avatar) urls.push(r.avatar); });
+      if (d.profile && d.profile.logo_url) urls.push(d.profile.logo_url);
+      await Promise.race([
+        Promise.all(urls.map(u => new Promise(res => {
+          const img = new Image(); img.crossOrigin = 'anonymous';
+          const done = ok => { global.Poster.imgCache[u] = ok ? img : null; res(); };
+          img.onload = () => done(true); img.onerror = () => done(false);
+          img.src = u;
+          setTimeout(() => { if (!img.complete) done(false); }, 2200);
+        }))),
+        new Promise(res => setTimeout(res, 2500))
+      ]);
+
+      const canvas = global.Poster.draw(d);
+      shotBlob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+      $('#shotImg').src = canvas.toDataURL('image/png');
+      $('#shotMask').classList.add('on'); $('#shotView').classList.add('on');
+      const ios = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      $('#shotTip').textContent = ios
+        ? 'iPhone：长按上方图片 →「存储到照片」；或点「分享」发给微信好友'
+        : '点「保存到相册」直接下载；也可点「分享」发给队友';
+    } catch (e) {
+      console.error(e); toast('截图失败：' + (e.message || '请改用手机系统截图'));
+    } finally { btn.textContent = '📷'; }
+  }
+  function closeShot() {
+    const m = $('#shotMask'), v = $('#shotView');
+    if (m) m.classList.remove('on');
+    if (v) v.classList.remove('on');
+  }
+  function saveShotToDisk() {
+    if (!shotBlob) return toast('请先生成截图');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(shotBlob);
+    a.download = '狮山实达-' + new Date().toISOString().slice(0, 10) + '.png';
+    a.click(); toast('已保存到下载目录');
+  }
+  async function shareShotToApp() {
+    if (!shotBlob) return toast('请先生成截图');
+    const file = new File([shotBlob], '狮山实达.png', { type: 'image/png' });
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: '狮山实达数据统计' }); return;
+      }
+      if (navigator.share) { await navigator.share({ title: '狮山实达数据统计', text: '球队战绩与射手榜' }); return; }
+      toast('当前浏览器不支持分享，可长按图片保存');
+    } catch (e) { /* 用户取消 */ }
+  }
+
+  /* ---------------- 录入界面（录入员专用，极简） ---------------- */
+  /* 当前正在录入的内容 */
+  const RC = { goals: [{ p: '', n: 1 }], assists: [{ p: '', n: 1 }] };
+
+  function playerOpts(sel) {
+    return ST.players.filter(p => p.active !== false).map(p =>
+      '<option value="' + esc(p.id) + '"' + (p.id === sel ? ' selected' : '') + '>#' + esc(p.number || '-') + ' ' + esc(p.name) + '</option>'
+    ).join('');
+  }
+  function evRowHtml(kind, i, row) {
+    return '<div class="evrow" data-kind="' + kind + '" data-i="' + i + '">' +
+      '<select class="ipt ev-p">' + '<option value="">选择球员</option>' + playerOpts(row.p) + '</select>' +
+      '<input class="ipt ev-n" type="number" inputmode="numeric" min="1" value="' + (row.n || 1) + '">' +
+      '<button class="ev-del">✕</button></div>';
+  }
+  function evRowsHtml(kind) {
+    const rows = RC[kind];
+    return rows.map((r, i) => evRowHtml(kind, i, r)).join('');
+  }
+
+  function renderRecord() {
+    const el = $('#recordBody');
+    if (!el) return;
+    if (!canRecord()) {
+      el.innerHTML = '<div class="block"><div class="empty"><i>🔒</i>需要登录后才能录入</div>' +
+        '<button class="btn wide" id="rc_login" style="margin-top:6px">登录（管理员 / 录入员）</button>' +
+        '<div class="note" style="margin-top:12px">未登录时 App 为只读浏览模式，可自由查看赛程、榜单、球员。</div></div>';
+      $('#rc_login').onclick = openAdmin;
+      return;
+    }
+    if (!ST.players.length) {
+      el.innerHTML = '<div class="block"><div class="empty"><i>👥</i>还没有球员</div>' +
+        '<div class="note" style="margin-top:10px">请先让管理员在「球员」页添加球员，之后才能录入进球与助攻。</div></div>';
+      return;
+    }
+    const vOpts = ST.venues.map(v => '<option value="' + esc(v.id) + '">' + esc(v.name) + '</option>').join('');
+    const now = new Date(); now.setHours(19, 30, 0, 0);
+    el.innerHTML =
+      '<div class="block rc">' +
+        '<div class="block-hd"><h3>本场比赛</h3><span class="block-sub">必填</span></div>' +
+        '<div class="fld"><label>比赛日期</label><input class="ipt big" type="datetime-local" id="rc_date" value="' + toLocalInput(now.toISOString()) + '"></div>' +
+        '<div class="fld"><label>场地</label><select class="ipt big" id="rc_venue"><option value="">未指定</option>' + vOpts + '</select></div>' +
+        '<div class="fld"><label>对手</label><input class="ipt big" id="rc_opp" placeholder="对手队名"></div>' +
+        '<div class="fld"><label>比分</label><div class="score-row">' +
+          '<input class="ipt big" type="number" inputmode="numeric" id="rc_our" placeholder="我方" value="0">' +
+          '<span class="vs">:</span>' +
+          '<input class="ipt big" type="number" inputmode="numeric" id="rc_opp2" placeholder="对手" value="0">' +
+        '</div></div>' +
+      '</div>' +
+      '<div class="block rc">' +
+        '<div class="block-hd"><h3>进球</h3><span class="block-sub" id="rc_gsum">共 0 球</span></div>' +
+        '<div id="rc_goals">' + evRowsHtml('goals') + '</div>' +
+        '<button class="btn wide ghost" id="rc_addg" style="margin-top:8px">＋ 添加进球球员</button>' +
+      '</div>' +
+      '<div class="block rc">' +
+        '<div class="block-hd"><h3>助攻</h3><span class="block-sub" id="rc_asum">共 0 次</span></div>' +
+        '<div id="rc_assists">' + evRowsHtml('assists') + '</div>' +
+        '<button class="btn wide ghost" id="rc_adda" style="margin-top:8px">＋ 添加助攻球员</button>' +
+      '</div>' +
+      '<div style="margin:14px 0"><button class="btn wide big" id="rc_save">✓ 保存这场比赛</button></div>' +
+      '<div class="block"><div class="block-hd"><h3>最近录入</h3><span class="block-sub">点开可查看详情 / 删除</span></div>' +
+        '<div id="rc_recent" class="list">' + recentHtml() + '</div></div>';
+
+    const bind = () => {
+      $$('#recordBody .evrow').forEach(row => {
+        row.querySelector('.ev-p').onchange = e => { RC[row.dataset.kind][+row.dataset.i].p = e.target.value; };
+        row.querySelector('.ev-n').oninput = e => {
+          RC[row.dataset.kind][+row.dataset.i].n = Number(e.target.value) || 1; updSum();
+        };
+        row.querySelector('.ev-del').onclick = () => {
+          const arr = RC[row.dataset.kind];
+          arr.splice(+row.dataset.i, 1);
+          if (!arr.length) arr.push({ p: '', n: 1 });
+          const box = row.dataset.kind === 'goals' ? '#rc_goals' : '#rc_assists';
+          $(box).innerHTML = evRowsHtml(row.dataset.kind); bind(); updSum();
+        };
+      });
+    };
+    const updSum = () => {
+      const g = RC.goals.reduce((s, r) => s + (Number(r.n) || 0), 0);
+      const a = RC.assists.reduce((s, r) => s + (Number(r.n) || 0), 0);
+      $('#rc_gsum').textContent = '共 ' + g + ' 球';
+      $('#rc_asum').textContent = '共 ' + a + ' 次';
+    };
+    const addRow = kind => {
+      RC[kind].push({ p: '', n: 1 });
+      const box = kind === 'goals' ? '#rc_goals' : '#rc_assists';
+      $(box).innerHTML = evRowsHtml(kind); bind(); updSum();
+    };
+    $('#rc_addg').onclick = () => addRow('goals');
+    $('#rc_adda').onclick = () => addRow('assists');
+    $('#rc_save').onclick = saveRecord;
+    bind(); updSum();
+    $$('#rc_recent .fix').forEach(n => n.onclick = () => openMatch(n.dataset.mid));
+  }
+
+  function recentHtml() {
+    const mine = ST.matches.filter(m => m.status === 'finished')
+      .sort((a, b) => new Date(b.match_date || 0) - new Date(a.match_date || 0)).slice(0, 6);
+    return mine.length ? mine.map(m => fixtureRow(m)).join('') :
+      '<div class="empty" style="padding:14px 0">还没有录入记录</div>';
+  }
+
+  async function saveRecord() {
+    const opp = ($('#rc_opp').value || '').trim();
+    if (!opp) return toast('请填写对手队名');
+    const date = $('#rc_date').value ? toISO($('#rc_date').value) : null;
+    if (!date) return toast('请选择比赛日期');
+    const our = Number($('#rc_our').value) || 0;
+    const oppS = Number($('#rc_opp2').value) || 0;
+    const goals = RC.goals.filter(r => r.p);
+    const assists = RC.assists.filter(r => r.p);
+    if (!goals.length && our > 0) {
+      if (!confirm('本场进了 ' + our + ' 球，但没有填写进球球员。仍要保存吗？')) return;
+    }
+    const btn = $('#rc_save'); const old = btn.textContent;
+    btn.textContent = '保存中…'; btn.disabled = true;
+    try {
+      const d = new Date(date);
+      const def = APP_CONFIG.recordDefaults || {};
+      const m = await Store.insert('matches', {
+        opponent: opp, match_date: date, season: String(d.getFullYear()),
+        round: '', competition: def.competition || '联赛', is_home: def.is_home !== false,
+        venue_id: $('#rc_venue').value || null,
+        our_score: our, opp_score: oppS, status: 'finished', remark: '',
+        created_by: ST.user || ''
+      });
+      for (const r of goals) {
+        await Store.insert('events', { match_id: m.id, player_id: r.p, type: 'goal', count: Number(r.n) || 1, minute: null, is_penalty: false });
+      }
+      for (const r of assists) {
+        await Store.insert('events', { match_id: m.id, player_id: r.p, type: 'assist', count: Number(r.n) || 1, minute: null, is_penalty: false });
+      }
+      RC.goals = [{ p: '', n: 1 }]; RC.assists = [{ p: '', n: 1 }];
+      await refresh();
+      renderRecord();
+      toast('已保存：' + opp + ' ' + our + ':' + oppS);
+    } catch (e) {
+      toast('保存失败：' + (e.message || e)); btn.textContent = old; btn.disabled = false;
+    }
+  }
+
+  /* ---------------- 导航 ---------------- */
+  const NAV = [
+    { v: 'home', i: '🏠', t: '首页', always: true },
+    { v: 'record', i: '📝', t: '录入', role: 'rec' },
+    { v: 'fixtures', i: '📅', t: '赛程', always: true },
+    { v: 'stats', i: '🏆', t: '榜单', always: true },
+    { v: 'players', i: '👥', t: '球员', always: true },
+    { v: 'venues', i: '⚽', t: '场地', always: true }
+  ];
+  /* 渲染底部导航：录入员/管理员多一个「录入」 */
+  function renderNav() {
+    const bar = $('#tabbar');
+    const list = NAV.filter(n => n.always || (n.role === 'rec' && canRecord()));
+    bar.innerHTML = list.map(n =>
+      '<button class="tbtn' + (ST.view === n.v ? ' active' : '') + '" data-view="' + n.v + '">' +
+      '<i>' + n.i + '</i><span>' + n.t + '</span></button>').join('');
+    $$('#tabbar .tbtn').forEach(b => b.onclick = () => go(b.dataset.view));
+  }
+  /* 切换页面 */
+  function go(v) {
+    ST.view = v;
+    $$('.view').forEach(x => x.classList.remove('active'));
+    const el = $('#view-' + v); if (el) el.classList.add('active');
+    $$('#tabbar .tbtn').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+    if (v === 'record') renderRecord();
+    window.scrollTo(0, 0);
+  }
+
+  $$('.tab[data-lb]').forEach(b => b.onclick = () => {
+    $$('.tab[data-lb]').forEach(x => x.classList.remove('active')); b.classList.add('active');
+    ST.lb = b.dataset.lb; renderFullRank();
+  });
+  on('#btnAdmin', 'onclick', openAdmin);
+  on('#btnAddMatch', 'onclick', openMatchNew);
+  on('#btnAddPlayer', 'onclick', openPlayerNew);
+  on('#btnAddVenue', 'onclick', openVenueNew);
+  on('#seasonFilter', 'onchange', renderFixtures);
+  on('#playerSearch', 'oninput', renderPlayers);
+  on('#btnShot', 'onclick', doShot);
+  on('#btnSaveShot', 'onclick', saveShotToDisk);
+  on('#btnShareShot', 'onclick', shareShotToApp);
+
+  /* ---------------- PWA ---------------- */
+  let deferredPrompt = null;
+  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; });
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => { }));
+  }
+
+  /* ---------------- 启动 ---------------- */
+  (async function boot() {
+    loadAdmin();
+    const mode = await Store.init();
+    await refresh();
+    const empty = !ST.matches.length && !ST.players.length && !ST.venues.length;
+    renderNav();
+    go('home');
+    /* 环境自检：把关键依赖状态打到控制台，方便排查「点不动」 */
+    const diag = {
+      网址: global.location.href,
+      协议: global.location.protocol,
+      弹窗结构: !!$('#sheet') && !!$('#sheetBody'),
+      顶部按钮: !!$('#btnAdmin'),
+      supabase: !!(global.supabase && global.supabase.createClient),
+      海报模块: !!global.Poster,
+      存储可用: (function () { try { localStorage.setItem('__t', '1'); localStorage.removeItem('__t'); return true; } catch (e) { return false; } })(),
+      数据模式: mode,
+      云端地址: Store.cfg.url || '(未配置)'
+    };
+    console.log('[狮山实达] 环境自检', diag);
+    global.__DIAG = diag;
+    if (!diag.supabase) console.warn('[狮山实达] vendor/supabase.js 未加载 → 无法连云端（请确认该文件已上传）');
+    if (!diag.Poster) console.warn('[狮山实达] js/poster.js 未加载 → 截图不可用（请确认该文件已上传）');
+  })();
+
+  window.__SCLH = { ST: ST, refresh: refresh };
+})();
