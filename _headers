@@ -1,0 +1,25 @@
+# Cloudflare Pages —— 缓存策略
+# 作用：HTML 每次都校验（保证更新能立刻生效），静态资源长缓存（加快打开速度）
+
+# 首页：必须每次校验，否则用户会一直看到旧版
+/
+  Cache-Control: no-cache
+
+/index.html
+  Cache-Control: no-cache
+
+/manifest.json
+  Cache-Control: no-cache
+
+/sw.js
+  Cache-Control: no-cache
+
+# 带 hash 或版本化的静态资源：长缓存
+/css/*
+  Cache-Control: public, max-age=3600
+
+/js/*
+  Cache-Control: public, max-age=3600
+
+/icons/*
+  Cache-Control: public, max-age=604800

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>狮山实达数据统计</title>
+<meta name="theme-color" content="#14265A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="狮山实达">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="appbar">
+  <div class="appbar-in">
+    <div class="brand">
+      <span class="brand-badge">狮</span>
+      <div class="brand-txt">
+        <b id="appTitle">狮山实达数据统计</b>
+        <small id="modeTag">本机模式</small>
+      </div>
+    </div>
+    <div class="appbar-acts">
+      <button class="icobtn" id="btnShot" title="一键截图">📷</button>
+      <button class="icobtn" id="btnAdmin" title="管理">⚙️</button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+
+  <!-- ============ 首页 ============ -->
+  <section class="view active" id="view-home">
+    <div id="homeShot" class="shot-wrap">
+
+      <div class="club-card" id="clubCard">
+        <div class="club-top">
+          <div class="club-logo" id="clubLogo">狮</div>
+          <div class="club-meta">
+            <h2 id="clubName">狮山实达足球俱乐部</h2>
+            <p class="slogan" id="clubSlogan">以狮之名，联合致胜</p>
+            <div class="club-tags">
+              <span class="tag" id="clubFounded">成立 2021</span>
+              <span class="tag" id="clubHome">主场 --</span>
+            </div>
+          </div>
+        </div>
+        <p class="club-intro" id="clubIntro"></p>
+        <div class="club-form" id="clubForm"></div>
+        <div class="club-stats" id="clubStats"></div>
+      </div>
+
+      <div class="block">
+        <div class="block-hd">
+          <h3>赛程</h3>
+          <span class="block-sub" id="fixtureSub"></span>
+        </div>
+        <div id="homeFixtures" class="list"></div>
+      </div>
+
+      <div class="block two-col">
+        <div>
+          <div class="block-hd"><h3>射手榜</h3></div>
+          <div id="homeGoals" class="rank"></div>
+        </div>
+        <div>
+          <div class="block-hd"><h3>助攻榜</h3></div>
+          <div id="homeAssists" class="rank"></div>
+        </div>
+      </div>
+
+      <div class="shot-foot">
+        <span>狮山实达 · 数据统计</span>
+        <span id="shotDate"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 赛程 ============ -->
+  <section class="view" id="view-fixtures">
+    <div class="chips" id="compFilter"></div>
+    <div class="toolbar">
+      <select id="seasonFilter" class="sel"></select>
+      <button class="btn ghost" id="btnAddMatch">＋ 添加比赛</button>
+    </div>
+    <div id="allFixtures" class="list"></div>
+  </section>
+
+  <!-- ============ 榜单 ============ -->
+  <section class="view" id="view-stats">
+    <div class="tabs six">
+      <button class="tab active" data-lb="goal">射手</button>
+      <button class="tab" data-lb="assist">助攻</button>
+      <button class="tab" data-lb="app">出场</button>
+      <button class="tab" data-lb="shoot">射门</button>
+      <button class="tab" data-lb="yellow">黄牌</button>
+      <button class="tab" data-lb="red">红牌</button>
+    </div>
+    <div id="fullRank" class="rank big"></div>
+    <div class="block">
+      <div class="block-hd"><h3>近期比赛</h3></div>
+      <div id="statMatches" class="list"></div>
+    </div>
+  </section>
+
+  <!-- ============ 球员 ============ -->
+  <section class="view" id="view-players">
+    <div class="toolbar">
+      <input id="playerSearch" class="ipt" placeholder="搜索姓名 / 号码">
+      <button class="btn ghost" id="btnAddPlayer">＋ 添加球员</button>
+    </div>
+    <div id="playerList" class="cards"></div>
+  </section>
+
+  <!-- ============ 录入（录入员专用） ============ -->
+  <section class="view" id="view-record">
+    <div id="recordBody"></div>
+  </section>
+
+  <!-- ============ 场地 ============ -->
+  <section class="view" id="view-venues">
+    <div class="toolbar">
+      <span class="hint" id="venueHint">共 0 个场地</span>
+      <button class="btn ghost" id="btnAddVenue">＋ 添加场地</button>
+    </div>
+    <div id="venueList" class="cards"></div>
+  </section>
+
+</main>
+
+<nav class="tabbar" id="tabbar">
+  <button class="tbtn active" data-view="home"><i>🏠</i><span>首页</span></button>
+  <button class="tbtn" data-view="fixtures"><i>📅</i><span>赛程</span></button>
+  <button class="tbtn" data-view="stats"><i>🏆</i><span>榜单</span></button>
+  <button class="tbtn" data-view="players"><i>👥</i><span>球员</span></button>
+  <button class="tbtn" data-view="venues"><i>⚽</i><span>场地</span></button>
+</nav>
+
+<!-- 弹窗 -->
+<div class="mask" id="mask"></div>
+<div class="sheet" id="sheet">
+  <div class="sheet-hd">
+    <b id="sheetTitle">标题</b>
+    <button class="icobtn" id="sheetClose">✕</button>
+  </div>
+  <div class="sheet-bd" id="sheetBody"></div>
+</div>
+
+<!-- 截图预览 -->
+<div class="mask" id="shotMask"></div>
+<div class="shotview" id="shotView">
+  <div class="shotview-hd">
+    <b>首页截图</b>
+    <button class="icobtn" id="shotClose">✕</button>
+  </div>
+  <div class="shotview-bd"><img id="shotImg" alt="首页截图"></div>
+  <div class="shotview-ft">
+    <button class="btn" id="btnSaveShot">保存到相册</button>
+    <button class="btn ghost" id="btnShareShot">分享</button>
+  </div>
+  <p class="tip" id="shotTip"></p>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="vendor/supabase.js"></script>
+<script src="js/config.js"></script>
+<script src="js/store.js"></script>
+<script src="js/poster.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

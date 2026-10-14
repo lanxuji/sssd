@@ -1,0 +1,17 @@
+{
+  "name": "狮山实达数据统计",
+  "short_name": "狮山实达",
+  "description": "狮山实达足球俱乐部：赛程、射手榜、助攻榜、球员与场地管理",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#14265A",
+  "theme_color": "#14265A",
+  "lang": "zh-CN",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
