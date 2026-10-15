@@ -4,16 +4,21 @@
 (function () {
   'use strict';
 
+  /* ★ 必须先定义：本文件后续大量使用 global（= window）。
+     缺少这一行会导致脚本在首次使用 global 处直接中断，
+     表现为「页面能显示但所有按钮点不动」。 */
+  const global = window;
+
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.prototype.slice.call((r || document).querySelectorAll(s));
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   /* ---------------- 全局错误提示 ----------------
-     任何 JS 错误都显式告知，避免「点击没反应」却查不到原因 */
-  global.addEventListener('error', e => {
+     任何 JS 错误都显式告知，避免「点击无反应」却查不到原因 */
+  window.addEventListener('error', e => {
     console.error('[运行错误]', e.message, e.filename, e.lineno);
     try { toast('出错了：' + (e.message || '未知错误')); } catch (_) { }
   });
-  global.addEventListener('unhandledrejection', e => {
+  window.addEventListener('unhandledrejection', e => {
     console.error('[异步错误]', e.reason);
     try { toast('出错了：' + ((e.reason && e.reason.message) || '网络或数据异常')); } catch (_) { }
   });
