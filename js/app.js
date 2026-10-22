@@ -24,7 +24,7 @@
   });
 
   /* ★ 版本号：改代码时记得 +1，用于确认用户浏览器拿到的是不是最新版 */
-  const APP_VER = 'v13';
+  const APP_VER = 'v14';
   /* 实际生效的 Service Worker 缓存版本（从 sw.js 里读出来） */
   let SW_VER = '';
   async function readSwVer() {
@@ -270,21 +270,35 @@
     $('#fixtureSub').textContent = '共 ' + ST.matches.length + ' 场';
   }
 
-  function rankHtml(rows, limit, emptyTxt) {
+  /* limit: 传 0 或 null 表示不限制，有数据的全部显示；clickable: 是否可点进球员信息卡 */
+  function rankHtml(rows, limit, emptyTxt, clickable) {
     if (!rows.length) return '<div class="empty" style="padding:14px 0">' + (emptyTxt || '暂无数据') + '</div>';
     const r = limit ? rows.slice(0, limit) : rows;
     return r.map((x, i) => {
       const cls = i === 0 ? 't1' : i === 1 ? 't2' : i === 2 ? 't3' : '';
-      return '<div class="rk"><div class="rk-no ' + cls + '">' + (i + 1) + '</div>' +
+      const tail = clickable ? '<span class="rk-go">›</span>' : '';
+      return '<div class="rk' + (clickable ? ' tap' : '') + '"' + (clickable ? ' data-pid="' + esc(x.p.id) + '"' : '') + '>' +
+        '<div class="rk-no ' + cls + '">' + (i + 1) + '</div>' +
         avatarHtml(x.p.name, x.p.avatar_url, 'rk-av') +
         '<div class="rk-nm">' + esc(x.p.name) + (x.p.number ? '<small>#' + esc(x.p.number) + '</small>' : '') + '</div>' +
-        '<div class="rk-v">' + x.v + '</div></div>';
+        '<div class="rk-v">' + x.v + '</div>' + tail + '</div>';
     }).join('');
   }
 
+  /* 给榜单行绑定点击 → 打开球员信息卡 */
+  function bindRankTap(scope) {
+    $$(scope + ' .rk.tap').forEach(n => n.onclick = () => {
+      const p = playerById(n.dataset.pid);
+      if (p) openPlayerDetail(p);
+    });
+  }
+
   function renderHomeBoards() {
-    $('#homeGoals').innerHTML = rankHtml(board('goal'), 5, '暂无进球数据');
-    $('#homeAssists').innerHTML = rankHtml(board('assist'), 5, '暂无助攻数据');
+    /* 不限条数：有进球/助攻数据的球员全部列出 */
+    $('#homeGoals').innerHTML = rankHtml(board('goal'), 0, '暂无进球数据', true);
+    $('#homeAssists').innerHTML = rankHtml(board('assist'), 0, '暂无助攻数据', true);
+    bindRankTap('#homeGoals');
+    bindRankTap('#homeAssists');
   }
 
   /* 赛事筛选标签 */
@@ -344,14 +358,15 @@
         const cls = i === 0 ? 't1' : i === 1 ? 't2' : i === 2 ? 't3' : '';
         const sub = '<small>#' + esc(x.p.number || '-') + ' · ' + esc(x.p.position || '球员') + '</small>';
         const pen = showPen ? '<span class="rk-c2">' + (x.pen || 0) + '</span>' : '';
-        return '<div class="rk"><div class="rk-no ' + cls + '">' + (i + 1) + '</div>' +
+        return '<div class="rk tap" data-pid="' + esc(x.p.id) + '"><div class="rk-no ' + cls + '">' + (i + 1) + '</div>' +
           avatarHtml(x.p.name, x.p.avatar_url, 'rk-av') +
           '<div class="rk-nm c1">' + esc(x.p.name) + sub + '</div>' +
           pen +
-          '<div class="rk-v c3">' + x.v + '</div></div>';
+          '<div class="rk-v c3">' + x.v + '</div><span class="rk-go">›</span></div>';
       }).join('');
     }
     $('#fullRank').innerHTML = html;
+    bindRankTap('#fullRank');
     $('#statMatches').innerHTML = finishedMatches().slice(0, 5).map(m => fixtureRow(m)).join('') ||
       '<div class="empty" style="padding:14px 0">暂无比赛记录</div>';
     $$('#statMatches .fix').forEach(n => n.onclick = () => openMatch(n.dataset.mid));

@@ -166,6 +166,10 @@ img{max-width:100%}
 .rk-nm{flex:1;min-width:0;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rk-nm small{color:var(--muted);font-size:11px;margin-left:4px}
 .rk-v{font-size:14px;font-weight:800;color:var(--navy);flex:none}
+/* 可点进球员信息卡的榜单行 */
+.rk.tap{cursor:pointer;transition:background .15s,transform .1s}
+.rk.tap:active{background:rgba(11,95,66,.07);transform:scale(.995)}
+.rk-go{flex:none;margin-left:6px;font-size:16px;color:var(--ink-3);line-height:1}
 .rank.big .rk{padding:10px 2px}
 .rank.big .rk-nm{font-size:14.5px}
 .rank.big .rk-v{font-size:17px}
