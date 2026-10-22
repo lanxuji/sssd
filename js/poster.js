@@ -121,7 +121,7 @@
       /* ---- 背景（整张底，绝不会缺） ---- */
       ctx.fillStyle = BG; ctx.fillRect(0, 0, W, H);
       const bgG = ctx.createLinearGradient(0, 0, W, H);
-      bgG.addColorStop(0, '#F4F6FB'); bgG.addColorStop(1, '#E7ECF5');
+      bgG.addColorStop(0, '#F7FBF9'); bgG.addColorStop(1, '#EEF4F1');
       ctx.fillStyle = bgG; ctx.fillRect(0, 0, W, H);
 
       Poster.paint(ctx, d, W, PAD, CW, H);
@@ -165,47 +165,54 @@
       const p = d.profile || {};
       const h = Poster.cardClubH(ctx, d, CW);
 
-      /* 卡片：深蓝渐变 + 圆角 */
-      fillRR(ctx, x, y, CW, h, 18, NAVY);
-      rr(ctx, x, y, CW, h, 18);
-      ctx.fillStyle = grad(ctx, x, y, CW, h, NAVY, NAVY2); ctx.fill();
+      /* 卡片：透明玻璃（与网页一致：半透明白底 + 深色文字） */
+      const GLASS = 'rgba(255,255,255,.74)';
+      const HAIR = 'rgba(11,95,66,.14)';
+      const INK = '#0B3B2C', INK2 = '#3E6B5A', INK3 = '#6B8A7C';
+      const MAIN = '#0B5F42';
 
-      /* 右上角装饰圆 */
+      fillRR(ctx, x, y, CW, h, 18, GLASS);
+      rr(ctx, x, y, CW, h, 18);
+      ctx.fillStyle = grad(ctx, x, y, CW, h, 'rgba(255,255,255,.80)', 'rgba(255,255,255,.62)'); ctx.fill();
+      rr(ctx, x, y, CW, h, 18);
+      ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1; ctx.stroke();
+
+      /* 右上角装饰圆（极淡，只做质感） */
       ctx.save(); rr(ctx, x, y, CW, h, 18); ctx.clip();
       ctx.beginPath(); ctx.arc(x + CW - 26, y - 26, 96, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(242,183,5,.14)'; ctx.fill();
+      ctx.fillStyle = 'rgba(14,139,96,.10)'; ctx.fill();
       ctx.beginPath(); ctx.arc(x + CW + 16, y + h - 10, 64, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(255,255,255,.05)'; ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.30)'; ctx.fill();
       ctx.restore();
 
       let cy = y + 20;
-      /* 队徽 */
+      /* 队徽：主色实心，玻璃上的视觉锚点 */
       const logoUrl = p.logo_url;
       if (logoUrl && Poster.imgCache[logoUrl] && Poster.imgCache[logoUrl].complete && Poster.imgCache[logoUrl].naturalWidth) {
         ctx.save(); rr(ctx, x + 18, cy, 56, 56, 14); ctx.clip();
         ctx.drawImage(Poster.imgCache[logoUrl], x + 18, cy, 56, 56); ctx.restore();
       } else {
-        fillRR(ctx, x + 18, cy, 56, 56, 14, GOLD);
+        fillRR(ctx, x + 18, cy, 56, 56, 14, MAIN);
         text(ctx, String(p.name || '狮').replace(/足球|俱乐部|队/g, '').slice(0, 2) || '狮',
-          x + 18 + 28, cy + 28 + 1, { size: 25, weight: '800', color: NAVY, align: 'center', baseline: 'middle' });
+          x + 18 + 28, cy + 28 + 1, { size: 23, weight: '800', color: '#fff', align: 'center', baseline: 'middle' });
       }
       /* 队名 + 口号 */
       const nx = x + 18 + 56 + 14;
       const maxW = CW - (nx - x) - 18;
       ctx.font = '800 21px ' + FONT;
-      text(ctx, ellipsis(ctx, p.name || '狮山实达', maxW), nx, cy + 26, { size: 21, weight: '800', color: '#fff' });
-      if (p.slogan) text(ctx, ellipsis(ctx, p.slogan, maxW), nx, cy + 47, { size: 13, weight: '600', color: GOLD });
+      text(ctx, ellipsis(ctx, p.name || '狮山实达', maxW), nx, cy + 26, { size: 21, weight: '800', color: INK });
+      if (p.slogan) text(ctx, ellipsis(ctx, p.slogan, maxW), nx, cy + 47, { size: 13, weight: '700', color: '#755000' });
       cy += 62 + 10;
 
-      /* 标签 */
+      /* 标签：更透的玻璃 + 深字 */
       const tags = [p.founded ? '成立 ' + p.founded : '', p.home_venue || ''].filter(Boolean);
       let tx = x + 18;
       tags.forEach(t => {
         ctx.font = '600 11.5px ' + FONT;
         const w = ctx.measureText(t).width + 20;
-        fillRR(ctx, tx, cy, w, 22, 11, 'rgba(255,255,255,.14)');
-        rr(ctx, tx, cy, w, 22, 11); ctx.strokeStyle = 'rgba(255,255,255,.24)'; ctx.lineWidth = 1; ctx.stroke();
-        text(ctx, t, tx + w / 2, cy + 11 + 1, { size: 11.5, weight: '600', color: '#fff', align: 'center', baseline: 'middle' });
+        fillRR(ctx, tx, cy, w, 22, 11, 'rgba(255,255,255,.58)');
+        rr(ctx, tx, cy, w, 22, 11); ctx.strokeStyle = HAIR; ctx.lineWidth = 1; ctx.stroke();
+        text(ctx, t, tx + w / 2, cy + 11 + 1, { size: 11.5, weight: '600', color: INK, align: 'center', baseline: 'middle' });
         tx += w + 7;
       });
       cy += 22 + 8;
@@ -214,7 +221,7 @@
       if (p.intro) {
         ctx.font = '400 12.5px ' + FONT;
         wrap(ctx, p.intro, CW - 36, 3).forEach(ln => {
-          cy += 19; text(ctx, ln, x + 18, cy, { size: 12.5, color: 'rgba(255,255,255,.72)' });
+          cy += 19; text(ctx, ln, x + 18, cy, { size: 12.5, color: INK2 });
         });
         cy += 4;
       }
@@ -222,21 +229,21 @@
       /* 近况小球 */
       if (d.recent && d.recent.length) {
         cy += 20;
-        text(ctx, '近况', x + 18, cy, { size: 12, color: 'rgba(255,255,255,.62)' });
+        text(ctx, '近况', x + 18, cy, { size: 12, weight: '600', color: INK3 });
         let bx = x + 18 + 34;
         d.recent.slice(0, 6).forEach(r => {
           ctx.beginPath(); ctx.arc(bx + 9, cy - 4, 9, 0, Math.PI * 2);
-          ctx.fillStyle = r.cls === 'w' ? '#0E9F6E' : r.cls === 'l' ? '#E02424' : '#8E9AAE'; ctx.fill();
+          ctx.fillStyle = r.cls === 'w' ? '#0E9F6E' : r.cls === 'l' ? '#E02424' : '#6B7789'; ctx.fill();
           text(ctx, r.t, bx + 9, cy - 4 + 1, { size: 10, weight: '800', color: '#fff', align: 'center', baseline: 'middle' });
           bx += 22;
         });
-        if (d.rate != null) text(ctx, '胜率 ' + d.rate + '%', x + CW - 18, cy, { size: 12, weight: '800', color: GOLD, align: 'right' });
+        if (d.rate != null) text(ctx, '胜率 ' + d.rate + '%', x + CW - 18, cy, { size: 12, weight: '800', color: MAIN, align: 'right' });
         cy += 4;
       }
 
       /* 分隔线 */
       cy += 14;
-      ctx.strokeStyle = 'rgba(255,255,255,.16)'; ctx.lineWidth = 1;
+      ctx.strokeStyle = HAIR; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(x + 18, cy); ctx.lineTo(x + CW - 18, cy); ctx.stroke();
 
       /* 数据栏 */
@@ -245,10 +252,10 @@
       const sw = (CW - 36) / n;
       stats.forEach((s, i) => {
         const cx = x + 18 + sw * i + sw / 2;
-        text(ctx, s.v, cx, cy + 26, { size: 20, weight: '800', color: GOLD, align: 'center' });
-        text(ctx, s.k, cx, cy + 44, { size: 11, color: 'rgba(255,255,255,.72)', align: 'center' });
+        text(ctx, s.v, cx, cy + 26, { size: 20, weight: '800', color: MAIN, align: 'center' });
+        text(ctx, s.k, cx, cy + 44, { size: 11, color: INK3, align: 'center' });
         if (i > 0) {
-          ctx.strokeStyle = 'rgba(255,255,255,.14)';
+          ctx.strokeStyle = HAIR;
           ctx.beginPath(); ctx.moveTo(x + 18 + sw * i, cy + 8); ctx.lineTo(x + 18 + sw * i, cy + 50); ctx.stroke();
         }
       });
@@ -262,8 +269,8 @@
     },
     cardFixture(ctx, d, x, y, CW) {
       const h = Poster.cardFixtureH(ctx, d, CW);
-      fillRR(ctx, x, y, CW, h, 14, CARD);
-      rr(ctx, x, y, CW, h, 14); ctx.strokeStyle = LINE; ctx.lineWidth = 1; ctx.stroke();
+      fillRR(ctx, x, y, CW, h, 14, 'rgba(255,255,255,.72)');
+      rr(ctx, x, y, CW, h, 14); ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1; ctx.stroke();
 
       text(ctx, '赛程', x + 16, y + 28, { size: 15, weight: '700' });
       if (d.fixtureSub) text(ctx, d.fixtureSub, x + CW - 16, y + 28, { size: 11.5, color: MUTED, align: 'right' });
@@ -312,8 +319,8 @@
     },
     cardRank(ctx, d, x, y, CW) {
       const h = Poster.cardRankH(ctx, d, CW);
-      fillRR(ctx, x, y, CW, h, 14, CARD);
-      rr(ctx, x, y, CW, h, 14); ctx.strokeStyle = LINE; ctx.lineWidth = 1; ctx.stroke();
+      fillRR(ctx, x, y, CW, h, 14, 'rgba(255,255,255,.72)');
+      rr(ctx, x, y, CW, h, 14); ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1; ctx.stroke();
 
       const half = CW / 2;
       text(ctx, '射手榜', x + 16, y + 28, { size: 15, weight: '700' });

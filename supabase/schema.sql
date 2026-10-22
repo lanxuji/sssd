@@ -106,10 +106,10 @@ grant all on all tables in schema public to anon, authenticated;
 
 -- 初始化球队资料行（on conflict do nothing：已存在则保留，不会覆盖你改过的内容）
 insert into public.team_profile (id, name, slogan, founded, home_venue, intro)
-values ('1', '狮山实达足球俱乐部', '狮山实达，实干致胜', '2021', '佛山世纪莲体育中心',
+values ('1', '狮山实达足球俱乐部', '实达酒鬼，快乐足球', '2021', '佛山世纪莲体育中心',
         '狮山实达足球俱乐部。')
 on conflict (id) do nothing;
 
 -- ⚠️ 老项目升级：如果之前建库时写入过旧队名（狮城联合），跑下面这句纠正
--- update public.team_profile set name='狮山实达足球俱乐部', slogan='狮山实达，实干致胜'
+-- update public.team_profile set name='狮山实达足球俱乐部', slogan='实达酒鬼，快乐足球'
 --  where id='1' and (name like '%狮城联合%' or slogan like '%联合致胜%');

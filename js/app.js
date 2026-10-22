@@ -24,7 +24,7 @@
   });
 
   /* ★ 版本号：改代码时记得 +1，用于确认用户浏览器拿到的是不是最新版 */
-  const APP_VER = 'v10';
+  const APP_VER = 'v13';
   /* 实际生效的 Service Worker 缓存版本（从 sw.js 里读出来） */
   let SW_VER = '';
   async function readSwVer() {

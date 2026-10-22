@@ -79,7 +79,7 @@ end $$;
 
 -- ---------- 7) 确保有球队资料行 ----------
 insert into public.team_profile (id, name, slogan, founded, home_venue, intro)
-values ('1', '狮山实达足球俱乐部', '狮山实达，实干致胜', '2021', '佛山世纪莲体育中心', '狮山实达足球俱乐部。')
+values ('1', '狮山实达足球俱乐部', '实达酒鬼，快乐足球', '2021', '佛山世纪莲体育中心', '狮山实达足球俱乐部。')
 on conflict (id) do nothing;
 
 -- ---------- 8) 刷新 PostgREST 缓存（关键！不跑这句可能仍报同样的错）----------

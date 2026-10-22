@@ -44,7 +44,7 @@ const APP_CONFIG = {
 /* 默认球队资料（首次使用时的初始值，可随时在 App 内修改） */
 const DEFAULT_PROFILE = {
   name: '狮山实达足球俱乐部',
-  slogan: '狮山实达，实干致胜',
+  slogan: '实达酒鬼，快乐足球',
   founded: '2021',
   home_venue: '佛山世纪莲体育中心',
   intro: '狮山实达足球俱乐部。',

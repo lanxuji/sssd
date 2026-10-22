@@ -15,13 +15,13 @@ from public.team_profile;
 -- 把旧队名/旧口号改成狮山实达（只在匹配旧值时才改，不会误伤你已改好的内容）
 update public.team_profile
 set name   = '狮山实达足球俱乐部',
-    slogan = '狮山实达，实干致胜'
+    slogan = '实达酒鬼，快乐足球'
 where (name like '%狮城联合%' or slogan like '%联合致胜%');
 
 -- 如果你想连简介、主场一起自定义，用下面这段（把值改成你想要的再跑）：
 -- update public.team_profile
 -- set name       = '狮山实达足球俱乐部',
---     slogan     = '狮山实达，实干致胜',
+--     slogan     = '实达酒鬼，快乐足球',
 --     founded    = '2021',
 --     home_venue = '佛山世纪莲体育中心',
 --     intro      = '狮山实达足球俱乐部。'
