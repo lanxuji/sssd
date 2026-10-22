@@ -401,6 +401,9 @@ body.has-wxtip{padding-top:calc(var(--bar-h) + 38px)}
 .wx-tip i{flex:none;font-style:normal;font-size:15px;opacity:.55;padding:0 2px}
 @keyframes wx-in{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
 
+/* 顶部模式标签：本机模式时标红警示 */
+#modeTag.warn{color:#C0392B;font-weight:700}
+
 /* 版本号标记：顶部状态栏一行小字，点 5 次复制诊断信息 */
 .vertag{font-style:normal;display:inline-block;margin-left:5px;padding:0 5px;border-radius:6px;
   background:rgba(255,255,255,.16);color:#fff;font-size:10px;font-weight:700;letter-spacing:.3px;
@@ -421,10 +424,18 @@ body.has-wxtip{padding-top:calc(var(--bar-h) + 38px)}
 .ipt.big,.sel.big{height:50px;font-size:16.5px}
 .btn.big{height:52px;font-size:16.5px;font-weight:700}
 /* 录入页：进球 / 助攻行 */
-.evrow{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+/* 录入行：球员 + 进球 + 助攻 并排一行 */
+.evrow{display:flex;align-items:center;gap:7px;margin-bottom:8px}
 .evrow .ev-p{flex:1;min-width:0}
-.evrow .ev-n{width:74px;flex:none;text-align:center;font-weight:700}
-.evrow .ev-del{width:40px;height:46px;flex:none;border-radius:10px;background:#FDECEC;color:var(--red);font-size:15px}
+/* 进球 / 助攻两个窄数字框并排 */
+.evrow .ev-n{width:52px;flex:none;text-align:center;font-weight:700;padding:0 4px;font-size:15px}
+.evrow .ev-del{width:38px;height:46px;flex:none;border-radius:10px;background:#FDECEC;color:var(--red);font-size:15px}
+/* 列表头：标出哪一列是进球、哪一列是助攻 */
+.ev-head{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--ink-3);
+  font-weight:700;padding:0 1px 6px}
+.ev-head span:nth-child(1){flex:1;min-width:0}
+.ev-head span:nth-child(2),.ev-head span:nth-child(3){width:52px;flex:none;text-align:center}
+.ev-head span:nth-child(4){width:38px;flex:none}
 /* 比分输入 */
 .score-row{display:flex;align-items:center;gap:10px}
 .score-row .ipt{flex:1;text-align:center;font-weight:800;font-size:20px}
@@ -442,6 +453,8 @@ body.has-wxtip{padding-top:calc(var(--bar-h) + 38px)}
 .rc-score .vs{font-size:17px}
 /* 继续录入选择器 */
 .rc-pick{margin-bottom:12px}
+/* 本机模式警告：录入的数据只有自己看得到，必须醒目 */
+.rc-warn{background:#FFF2F0;border:1px solid rgba(224,36,36,.32);color:#9B1C1C;margin-bottom:12px;line-height:1.7}
 .rc-pick select{font-weight:600}
 /* 输入框去掉预填提示后的留白仍要够大，方便点按 */
 .block.rc .ipt{height:44px}

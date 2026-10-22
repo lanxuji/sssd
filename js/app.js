@@ -24,7 +24,7 @@
   });
 
   /* ★ 版本号：改代码时记得 +1，用于确认用户浏览器拿到的是不是最新版 */
-  const APP_VER = 'v18';
+  const APP_VER = 'v21';
   /* 实际生效的 Service Worker 缓存版本（从 sw.js 里读出来） */
   let SW_VER = '';
   async function readSwVer() {
@@ -192,8 +192,31 @@
     ['#btnAddMatch', '#btnAddPlayer', '#btnAddVenue'].forEach(s => {
       const n = $(s); if (n) n.style.display = canEdit() ? '' : 'none';
     });
-    $('#modeTag').textContent = (Store.isCloud() ? '云端已连接' : '本机模式') +
-      (ST.role === 'admin' ? ' · 管理员' : ST.role === 'recorder' ? ' · 录入员' : '');
+    /* ---- 顶栏：按 config.topbar 决定显示什么（发给队友时可更干净） ---- */
+    const TB = Object.assign({ showVersion: 'admin', showMode: true, showAdminBtn: true },
+      (APP_CONFIG.topbar || {}));
+    const mt = $('#modeTag');
+    if (mt) {
+      if (TB.showMode) {
+        mt.textContent = (Store.isCloud() ? '云端已连接' : '⚠️ 本机模式') +
+          (ST.role === 'admin' ? ' · 管理员' : ST.role === 'recorder' ? ' · 录入员' : '');
+        mt.style.display = '';
+        mt.classList.toggle('warn', !Store.isCloud());
+        mt.title = Store.isCloud() ? '数据存云端，全队共享' : '数据只存这台设备，队友看不到';
+      } else {
+        mt.textContent = '';
+        mt.style.display = 'none';
+      }
+    }
+    /* 版本号：默认只对管理员显示，队友看不到 */
+    const vt0 = $('#verTag');
+    if (vt0) {
+      const vis = TB.showVersion === 'always' || (TB.showVersion === 'admin' && canEdit());
+      vt0.style.display = vis ? '' : 'none';
+    }
+    /* 齿轮：可隐藏（隐藏后需靠 #admin 进后台） */
+    const ab = $('#btnAdmin');
+    if (ab) ab.style.display = TB.showAdminBtn ? '' : 'none';
     $('#venueHint').textContent = '共 ' + ST.venues.length + ' 个场地';
     const d = new Date();
     $('#shotDate').textContent = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -1371,22 +1394,36 @@
 
   /* ---------------- 录入界面（录入员专用，极简） ---------------- */
   /* 当前正在录入的内容 */
-  const RC = { mid: '', goals: [{ p: '', n: 1 }], assists: [{ p: '', n: 1 }] };
+  /* 录入表单状态：一行 = 一个球员，同行的进球 / 助攻并排填
+     p 球员id，g 进球数，a 助攻数（都留空，空按 0 处理，不做预填） */
+  const RC = {
+    mid: '',                          // 继续录入的比赛 id
+    rows: [{ p: '', g: '', a: '' }],  // 每行一个球员，进球 / 助攻并排
+    date: '', venue: '', opp: '', our: '', oppS: ''   // 记住已填内容，重渲染不丢
+  };
 
   function playerOpts(sel) {
     return ST.players.filter(p => p.active !== false).map(p =>
       '<option value="' + esc(p.id) + '"' + (p.id === sel ? ' selected' : '') + '>#' + esc(p.number || '-') + ' ' + esc(p.name) + '</option>'
     ).join('');
   }
-  function evRowHtml(kind, i, row) {
-    return '<div class="evrow" data-kind="' + kind + '" data-i="' + i + '">' +
-      '<select class="ipt ev-p">' + '<option value="">选择球员</option>' + playerOpts(row.p) + '</select>' +
-      '<input class="ipt ev-n" type="number" inputmode="numeric" min="1" value="' + (row.n || 1) + '">' +
+  /* 一行：球员 + 进球 + 助攻 + 删除
+     占位 option 用空白（不显示提示文字），避免出现预选导致误存 */
+  function evRowHtml(i, row) {
+    return '<div class="evrow" data-i="' + i + '">' +
+      '<select class="ipt ev-p">' + '<option value=""' + (row.p ? '' : ' selected') + '></option>' + playerOpts(row.p) + '</select>' +
+      '<input class="ipt ev-n" type="number" inputmode="numeric" min="0" placeholder="球" value="' + (row.g === '' ? '' : row.g) + '" aria-label="进球">' +
+      '<input class="ipt ev-n" type="number" inputmode="numeric" min="0" placeholder="助" value="' + (row.a === '' ? '' : row.a) + '" aria-label="助攻">' +
       '<button class="ev-del">✕</button></div>';
   }
-  function evRowsHtml(kind) {
-    const rows = RC[kind];
-    return rows.map((r, i) => evRowHtml(kind, i, r)).join('');
+  function evRowsHtml() {
+    return RC.rows.map((r, i) => evRowHtml(i, r)).join('');
+  }
+  /* 汇总：分别统计进球 / 助攻 */
+  function rcSum() {
+    let g = 0, a = 0;
+    RC.rows.forEach(r => { g += Number(r.g) || 0; a += Number(r.a) || 0; });
+    return { g: g, a: a };
   }
 
   /* 未完成（未开赛）的比赛，供「继续录入」选择 */
@@ -1410,11 +1447,22 @@
         '<div class="note" style="margin-top:10px">请先让管理员在「球员」页添加球员，之后才能录入进球与助攻。</div></div>';
       return;
     }
+    /* 本机模式下录入的数据只有自己看得到 —— 必须醒目提示，避免白录 */
+    const OFFLINE_WARN = !Store.isCloud()
+      ? '<div class="note rc-warn"><b>⚠️ 当前是本机模式，录入的数据只有你自己能看到</b><br>' +
+        '请用管理员发的「队友专用链接」打开本页（打开后顶部显示「云端已连接」），' +
+        '否则这场比赛不会同步给全队。<br><br>' +
+        '<b>怎么确认？</b>看页面顶部标签：<br>' +
+        '· 显示「云端已连接 · 录入员」→ 正常，放心录<br>' +
+        '· 显示「本机模式 · 录入员」→ 就是现在这个状态，先去换链接</div>'
+      : '';
     const pend = pendingMatches();
-    const vOpts = ST.venues.map(v => '<option value="' + esc(v.id) + '">' + esc(v.name) + '</option>').join('');
-    const now = new Date(); now.setHours(19, 30, 0, 0);
+    const vOpts = ST.venues.map(v => '<option value="' + esc(v.id) + '"' + (v.id === RC.venue ? ' selected' : '') + '>' + esc(v.name) + '</option>').join('');
+    /* 场地占位项也留空，保持界面干净 */
+    const vHead = RC.venue ? '' : '<option value="" selected></option>';
 
     el.innerHTML =
+      OFFLINE_WARN +
       '<div class="block rc">' +
         '<div class="block-hd"><h3>本场比赛</h3><span class="block-sub" id="rc_mode">新录入</span></div>' +
         (pend.length ? '<div class="fld rc-pick">' +
@@ -1427,76 +1475,75 @@
           }).join('') +
           '</select></div>' : '') +
         '<div class="fld-row">' +
-          '<div class="fld"><label>日期</label><input class="ipt" type="datetime-local" id="rc_date" value="' + toLocalInput(now.toISOString()) + '"></div>' +
-          '<div class="fld"><label>场地</label><select class="ipt" id="rc_venue"><option value="">未指定</option>' + vOpts + '</select></div>' +
+          '<div class="fld"><label>日期</label><input class="ipt" type="date" id="rc_date" value="' + esc(RC.date || '') + '"></div>' +
+          '<div class="fld"><label>场地</label><select class="ipt" id="rc_venue">' + vHead + vOpts + '</select></div>' +
         '</div>' +
         '<div class="fld-row">' +
-          '<div class="fld"><label>对手</label><input class="ipt" id="rc_opp"></div>' +
+          '<div class="fld"><label>对手</label><input class="ipt" id="rc_opp" value="' + esc(RC.opp || '') + '"></div>' +
           '<div class="fld rc-score"><label>比分</label><div class="score-row">' +
-            '<input class="ipt" type="number" inputmode="numeric" id="rc_our">' +
+            '<input class="ipt" type="number" inputmode="numeric" id="rc_our" value="' + esc(RC.our || '') + '">' +
             '<span class="vs">:</span>' +
-            '<input class="ipt" type="number" inputmode="numeric" id="rc_opp2">' +
+            '<input class="ipt" type="number" inputmode="numeric" id="rc_opp2" value="' + esc(RC.oppS || '') + '">' +
           '</div></div>' +
         '</div>' +
-        '<button class="btn wide ghost" id="rc_cancel" style="display:none;margin-top:2px">取消继续录入，回到新录一场</button>' +
+        '<button class="btn wide ghost" id="rc_cancel" style="display:' + (RC.mid ? '' : 'none') + ';margin-top:2px">取消继续录入，回到新录一场</button>' +
       '</div>' +
+      /* ★ 进球 / 助攻合并成一个区块，同一行内并排填写 */
       '<div class="block rc">' +
-        '<div class="block-hd"><h3>进球</h3><span class="block-sub" id="rc_gsum">共 0 球</span></div>' +
-        '<div id="rc_goals">' + evRowsHtml('goals') + '</div>' +
-        '<button class="btn wide ghost" id="rc_addg" style="margin-top:8px">＋ 添加进球球员</button>' +
-      '</div>' +
-      '<div class="block rc">' +
-        '<div class="block-hd"><h3>助攻</h3><span class="block-sub" id="rc_asum">共 0 次</span></div>' +
-        '<div id="rc_assists">' + evRowsHtml('assists') + '</div>' +
-        '<button class="btn wide ghost" id="rc_adda" style="margin-top:8px">＋ 添加助攻球员</button>' +
+        '<div class="block-hd"><h3>本场数据</h3><span class="block-sub" id="rc_sum">进 0 · 助 0</span></div>' +
+        '<div class="ev-head"><span>球员</span><span>进球</span><span>助攻</span><span></span></div>' +
+        '<div id="rc_rows">' + evRowsHtml() + '</div>' +
+        '<button class="btn wide ghost" id="rc_add" style="margin-top:8px">＋ 添加球员</button>' +
       '</div>' +
       '<div style="margin:14px 0"><button class="btn wide big" id="rc_save">✓ 保存这场比赛</button></div>' +
       '<div class="block"><div class="block-hd"><h3>最近录入</h3><span class="block-sub">点开可查看详情 / 删除</span></div>' +
         '<div id="rc_recent" class="list">' + recentHtml() + '</div></div>';
 
+    /* 记住已填内容，避免重渲染时丢失 */
+    const keep = () => {
+      RC.date = ($('#rc_date').value || '');
+      RC.venue = ($('#rc_venue').value || '');
+      RC.opp = ($('#rc_opp').value || '');
+      RC.our = ($('#rc_our').value || '');
+      RC.oppS = ($('#rc_opp2').value || '');
+    };
+
     const bind = () => {
       $$('#recordBody .evrow').forEach(row => {
-        row.querySelector('.ev-p').onchange = e => { RC[row.dataset.kind][+row.dataset.i].p = e.target.value; };
-        row.querySelector('.ev-n').oninput = e => {
-          RC[row.dataset.kind][+row.dataset.i].n = Number(e.target.value) || 1; updSum();
-        };
+        const i = +row.dataset.i;
+        row.querySelector('.ev-p').onchange = e => { RC.rows[i].p = e.target.value; renderRecord(); };
+        const nums = row.querySelectorAll('.ev-n');
+        nums[0].oninput = e => { RC.rows[i].g = e.target.value; updSum(); };
+        nums[1].oninput = e => { RC.rows[i].a = e.target.value; updSum(); };
         row.querySelector('.ev-del').onclick = () => {
-          const arr = RC[row.dataset.kind];
-          arr.splice(+row.dataset.i, 1);
-          if (!arr.length) arr.push({ p: '', n: 1 });
-          const box = row.dataset.kind === 'goals' ? '#rc_goals' : '#rc_assists';
-          $(box).innerHTML = evRowsHtml(row.dataset.kind); bind(); updSum();
+          keep();
+          RC.rows.splice(i, 1);
+          if (!RC.rows.length) RC.rows.push({ p: '', g: '', a: '' });
+          renderRecord();
         };
       });
     };
     const updSum = () => {
-      const g = RC.goals.reduce((s, r) => s + (Number(r.n) || 0), 0);
-      const a = RC.assists.reduce((s, r) => s + (Number(r.n) || 0), 0);
-      $('#rc_gsum').textContent = '共 ' + g + ' 球';
-      $('#rc_asum').textContent = '共 ' + a + ' 次';
+      const t = rcSum();
+      const n = $('#rc_sum'); if (n) n.textContent = '进 ' + t.g + ' · 助 ' + t.a;
     };
-    const addRow = kind => {
-      RC[kind].push({ p: '', n: 1 });
-      const box = kind === 'goals' ? '#rc_goals' : '#rc_assists';
-      $(box).innerHTML = evRowsHtml(kind); bind(); updSum();
+    const addRow = () => {
+      keep();
+      RC.rows.push({ p: '', g: '', a: '' });
+      renderRecord();
     };
 
     /* ---- 继续录入：选中未完成的比赛，把已有信息带进表单 ---- */
     const setMode = txt => {
       const m = $('#rc_mode'); if (m) m.textContent = txt;
       const b = $('#rc_save'); if (b) b.textContent = txt === '新录入' ? '✓ 保存这场比赛' : '✓ 更新这场比赛';
+      if (RC.mid && txt !== '新录入' && $('#rc_cancel')) $('#rc_cancel').style.display = '';
     };
     const resetForm = () => {
-      RC.mid = '';
-      RC.goals = [{ p: '', n: 1 }]; RC.assists = [{ p: '', n: 1 }];
-      $('#rc_date').value = toLocalInput(now.toISOString());
-      $('#rc_venue').value = ''; $('#rc_opp').value = '';
-      $('#rc_our').value = ''; $('#rc_opp2').value = '';
-      $('#rc_goals').innerHTML = evRowsHtml('goals');
-      $('#rc_assists').innerHTML = evRowsHtml('assists');
-      if ($('#rc_pick')) $('#rc_pick').value = '';
-      if ($('#rc_cancel')) $('#rc_cancel').style.display = 'none';
-      bind(); updSum(); setMode('新录入');
+      RC.mid = ''; RC.rows = [{ p: '', g: '', a: '' }];
+      RC.date = ''; RC.venue = ''; RC.opp = ''; RC.our = ''; RC.oppS = '';
+      renderRecord();
+      setMode('新录入');
     };
 
     const pick = $('#rc_pick');
@@ -1506,30 +1553,44 @@
       const m = ST.matches.find(x => x.id === id);
       if (!m) return resetForm();
       RC.mid = id;
-      $('#rc_date').value = toLocalInput(m.match_date);
-      $('#rc_venue').value = m.venue_id || '';
-      $('#rc_opp').value = m.opponent || '';
-      $('#rc_our').value = (m.our_score == null ? '' : m.our_score);
-      $('#rc_opp2').value = (m.opp_score == null ? '' : m.opp_score);
-      /* 已有事件带进来，可继续补录 */
+      const d = new Date(m.match_date || 0);
+      RC.date = isNaN(d) ? '' : dateInputVal(d);
+      RC.venue = m.venue_id || '';
+      RC.opp = m.opponent || '';
+      RC.our = (m.our_score == null ? '' : String(m.our_score));
+      RC.oppS = (m.opp_score == null ? '' : String(m.opp_score));
+      /* 已有事件按球员聚合成行，进球 / 助攻并排显示 */
       const ev = ST.events.filter(e => e.match_id === id);
-      const g = ev.filter(e => e.type === 'goal').map(e => ({ p: e.player_id, n: Number(e.count) || 1 }));
-      const a = ev.filter(e => e.type === 'assist').map(e => ({ p: e.player_id, n: Number(e.count) || 1 }));
-      RC.goals = g.length ? g : [{ p: '', n: 1 }];
-      RC.assists = a.length ? a : [{ p: '', n: 1 }];
-      $('#rc_goals').innerHTML = evRowsHtml('goals');
-      $('#rc_assists').innerHTML = evRowsHtml('assists');
-      if ($('#rc_cancel')) $('#rc_cancel').style.display = '';
-      bind(); updSum();
+      const map = {}; const order = [];
+      ev.forEach(e => {
+        if (e.type !== 'goal' && e.type !== 'assist') return;
+        if (!map[e.player_id]) { map[e.player_id] = { p: e.player_id, g: '', a: '' }; order.push(e.player_id); }
+        const c = Number(e.count) || 0;
+        if (e.type === 'goal') map[e.player_id].g = String((Number(map[e.player_id].g) || 0) + c);
+        else map[e.player_id].a = String((Number(map[e.player_id].a) || 0) + c);
+      });
+      RC.rows = order.length ? order.map(k => map[k]) : [{ p: '', g: '', a: '' }];
+      renderRecord();
       setMode('继续录入 · ' + (m.opponent || ''));
+      toast('已载入：' + (m.opponent || '') );
     };
     if ($('#rc_cancel')) $('#rc_cancel').onclick = resetForm;
 
-    $('#rc_addg').onclick = () => addRow('goals');
-    $('#rc_adda').onclick = () => addRow('assists');
+    $('#rc_add').onclick = addRow;
     $('#rc_save').onclick = saveRecord;
+    /* 输入时记住，切页面回来不丢 */
+    ['#rc_date', '#rc_venue', '#rc_opp', '#rc_our', '#rc_opp2'].forEach(sel => {
+      const n = $(sel); if (n) n.onchange = keep;
+    });
     bind(); updSum();
+    if (RC.mid) setMode('继续录入');
     $$('#rc_recent .fix').forEach(n => n.onclick = () => openMatch(n.dataset.mid));
+  }
+
+  /* 把 Date 转成 <input type="date"> 需要的 YYYY-MM-DD（按本地时区） */
+  function dateInputVal(d) {
+    const p = n => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
   }
 
   function recentHtml() {
@@ -1542,21 +1603,31 @@
   async function saveRecord() {
     const opp = ($('#rc_opp').value || '').trim();
     if (!opp) return toast('请填写对手队名');
-    const date = $('#rc_date').value ? toISO($('#rc_date').value) : null;
-    if (!date) return toast('请选择比赛日期');
+    const dv = ($('#rc_date').value || '').trim();
+    if (!dv) return toast('请选择比赛日期');
+    /* 只选了日期没选时间时，自动补默认开球时间，避免显示成 00:00 */
+    const def = APP_CONFIG.recordDefaults || {};
+    const date = toISO(dv.length <= 10 ? dv + 'T' + (def.kickoff || '19:30') : dv);
+    if (!date) return toast('比赛日期无效');
     const our = $('#rc_our').value === '' ? 0 : (Number($('#rc_our').value) || 0);
     const oppS = $('#rc_opp2').value === '' ? 0 : (Number($('#rc_opp2').value) || 0);
-    const goals = RC.goals.filter(r => r.p);
-    const assists = RC.assists.filter(r => r.p);
+    /* 每行可同时填进球与助攻 */
+    const goals = RC.rows.filter(r => r.p && (Number(r.g) || 0) > 0)
+      .map(r => ({ p: r.p, n: Number(r.g) || 0 }));
+    const assists = RC.rows.filter(r => r.p && (Number(r.a) || 0) > 0)
+      .map(r => ({ p: r.p, n: Number(r.a) || 0 }));
     if (!goals.length && our > 0) {
       if (!confirm('本场进了 ' + our + ' 球，但没有填写进球球员。仍要保存吗？')) return;
+    }
+    /* 本机模式：录入的数据队友看不到，保存前再拦一次 */
+    if (!Store.isCloud()) {
+      if (!confirm('⚠️ 当前是本机模式，这场比赛保存后只有你自己能看到，不会同步给全队。\n\n确定要这样保存吗？（建议改用管理员发的队友专用链接）')) return;
     }
     const btn = $('#rc_save'); const old = btn.textContent;
     btn.textContent = '保存中…'; btn.disabled = true;
     const mid = RC.mid;   /* 有值 = 继续录入（更新），空 = 新录一场 */
     try {
       const d = new Date(date);
-      const def = APP_CONFIG.recordDefaults || {};
       const payload = {
         opponent: opp, match_date: date, season: String(d.getFullYear()),
         round: '', competition: def.competition || '联赛', is_home: def.is_home !== false,
@@ -1574,13 +1645,14 @@
         m = await Store.insert('matches', payload);
       }
       for (const r of goals) {
-        await Store.insert('events', { match_id: m.id, player_id: r.p, type: 'goal', count: Number(r.n) || 1, minute: null, is_penalty: false });
+        await Store.insert('events', { match_id: m.id, player_id: r.p, type: 'goal', count: r.n, minute: null, is_penalty: false });
       }
       for (const r of assists) {
-        await Store.insert('events', { match_id: m.id, player_id: r.p, type: 'assist', count: Number(r.n) || 1, minute: null, is_penalty: false });
+        await Store.insert('events', { match_id: m.id, player_id: r.p, type: 'assist', count: r.n, minute: null, is_penalty: false });
       }
-      RC.mid = '';
-      RC.goals = [{ p: '', n: 1 }]; RC.assists = [{ p: '', n: 1 }];
+      /* 清空表单 */
+      RC.mid = ''; RC.rows = [{ p: '', g: '', a: '' }];
+      RC.date = ''; RC.venue = ''; RC.opp = ''; RC.our = ''; RC.oppS = '';
       await refresh();
       renderRecord();
       toast((mid ? '已更新：' : '已保存：') + opp + ' ' + our + ':' + oppS);
@@ -1638,6 +1710,17 @@
     ST.lb = b.dataset.lb; renderFullRank();
   });
   on('#btnAdmin', 'onclick', openAdmin);
+  /* 备用入口：万一 ⚙️ 被隐藏，连点标题 5 次也能进后台 */
+  (function () {
+    const t = $('#appTitle'); if (!t) return;
+    let n = 0, last = 0;
+    t.onclick = () => {
+      const now = Date.now();
+      if (now - last > 1200) n = 0;
+      last = now; n++;
+      if (n >= 5) { n = 0; openAdmin(); }
+    };
+  })();
   on('#btnAddMatch', 'onclick', openMatchNew);
   on('#btnAddPlayer', 'onclick', openPlayerNew);
   on('#btnAddVenue', 'onclick', openVenueNew);
@@ -1700,6 +1783,12 @@
     if (!diag.supabase) console.warn('[狮山实达] vendor/supabase.js 未加载 → 无法连云端（请确认该文件已上传）');
     if (!diag.Poster) console.warn('[狮山实达] js/poster.js 未加载 → 截图不可用（请确认该文件已上传）');
     try { wechatTip(); } catch (e) { console.warn('微信提示未显示', e); }
+    /* 隐藏 ⚙️ 后的入口：网址后加 #admin 即可打开登录 */
+    try {
+      if (String(global.location.hash || '').replace(/^#/, '').toLowerCase() === 'admin') {
+        setTimeout(() => openAdmin(), 300);
+      }
+    } catch (e) { }
   })();
 
   window.__SCLH = { ST: ST, refresh: refresh };
