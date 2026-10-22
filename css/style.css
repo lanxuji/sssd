@@ -237,6 +237,113 @@ textarea.ipt{height:auto;padding:9px 11px;line-height:1.6}
 .note{background:#F7F9FD;border:1px solid var(--line);border-radius:10px;padding:11px;font-size:12.5px;color:var(--muted);line-height:1.7;margin-bottom:12px}
 .code{background:#0F1B33;color:#B9E0FF;font-size:11.5px;padding:10px;border-radius:8px;overflow-x:auto;white-space:pre-wrap;word-break:break-all;line-height:1.6;margin:8px 0}
 
+/* ===================== 球员信息卡（星光动效） ===================== */
+.pd{padding-bottom:6px}
+
+/* 舞台：全身照 + 环绕星光 */
+.pd-stage{position:relative;height:290px;margin:2px 0 6px;display:flex;align-items:flex-end;justify-content:center;overflow:hidden}
+
+/* 背后柔光 */
+.pd-glow{position:absolute;left:50%;top:44%;width:230px;height:230px;transform:translate(-50%,-50%);
+  background:radial-gradient(circle,rgba(242,183,5,.30) 0%,rgba(20,38,90,.16) 45%,transparent 70%);
+  border-radius:50%;animation:pd-breathe 4.2s ease-in-out infinite;pointer-events:none}
+@keyframes pd-breathe{
+  0%,100%{transform:translate(-50%,-50%) scale(1);opacity:.85}
+  50%{transform:translate(-50%,-50%) scale(1.10);opacity:1}
+}
+
+/* 脚下光环 */
+.pd-halo{position:absolute;left:50%;bottom:14px;width:150px;height:26px;transform:translateX(-50%);
+  background:radial-gradient(ellipse at center,rgba(242,183,5,.42) 0%,transparent 70%);
+  border-radius:50%;animation:pd-halo 3.4s ease-in-out infinite;pointer-events:none}
+@keyframes pd-halo{
+  0%,100%{transform:translateX(-50%) scaleX(1);opacity:.55}
+  50%{transform:translateX(-50%) scaleX(1.16);opacity:.9}
+}
+
+/* 环绕星光：整体缓慢旋转 */
+.pd-stars{position:absolute;left:50%;top:50%;width:0;height:0;
+  animation:pd-orbit 16s linear infinite;pointer-events:none}
+@keyframes pd-orbit{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+
+/* 单个光点：反向自转保持自身朝向，同时闪烁缩放 */
+.pd-star{position:absolute;left:0;top:0;width:var(--s,4px);height:var(--s,4px);border-radius:50%;
+  background:var(--gold);box-shadow:0 0 8px rgba(242,183,5,.9);
+  transform:rotate(var(--a)) translateX(var(--r)) rotate(calc(-1 * var(--a)));
+  animation:pd-twinkle 2.4s ease-in-out infinite;animation-delay:var(--d,0s)}
+.pd-star:nth-child(3n){background:#fff;box-shadow:0 0 8px rgba(255,255,255,.95)}
+.pd-star:nth-child(4n){background:#7FB2FF;box-shadow:0 0 8px rgba(127,178,255,.9)}
+@keyframes pd-twinkle{
+  0%,100%{opacity:.25;scale:.7}
+  50%{opacity:1;scale:1.25}
+}
+
+/* 全身照 */
+.pd-body{position:relative;z-index:3;display:flex;align-items:flex-end;justify-content:center;height:100%}
+.pd-cv{height:272px;width:auto;display:block;
+  animation:pd-in .62s cubic-bezier(.22,1.3,.36,1) both;filter:drop-shadow(0 6px 14px rgba(20,38,90,.18))}
+@keyframes pd-in{
+  from{opacity:0;transform:translateY(26px) scale(.9)}
+  to{opacity:1;transform:translateY(0) scale(1)}
+}
+.pd-fallback{width:96px;height:96px;border-radius:50%;background:var(--navy);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:40px;font-weight:800;margin-bottom:70px}
+
+/* 姓名 / 徽标 */
+.pd-name{text-align:center;font-size:20px;font-weight:800;letter-spacing:.5px;
+  animation:pd-fade .5s ease .18s both}
+.pd-badges{display:flex;justify-content:center;gap:7px;flex-wrap:wrap;margin-top:8px;
+  animation:pd-fade .5s ease .26s both}
+.pd-num{background:var(--navy);color:var(--gold);font-weight:800;font-size:13px;padding:3px 11px;border-radius:11px}
+.pd-pos{background:#EEF1F7;color:#5A6B8C;font-weight:700;font-size:12.5px;padding:3px 11px;border-radius:11px}
+.pd-join{background:#EEF1F7;color:#7A8399;font-size:12px;padding:3px 10px;border-radius:11px}
+@keyframes pd-fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* 数据四宫格 */
+.pd-stats{display:flex;gap:8px;margin-top:16px;animation:pd-fade .5s ease .32s both}
+.pd-st{flex:1;background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 4px;text-align:center}
+.pd-st b{display:block;font-size:19px;color:var(--navy);line-height:1.2}
+.pd-st span{font-size:11px;color:var(--muted)}
+
+/* 球衣切换 */
+.pd-kits{display:flex;gap:7px;justify-content:center;margin-top:12px;flex-wrap:wrap;
+  animation:pd-fade .5s ease .38s both}
+.kit{display:flex;align-items:center;gap:5px;height:32px;padding:0 11px;border-radius:16px;
+  background:#fff;border:1px solid var(--line);font-size:12.5px;color:var(--muted);font-weight:600}
+.kit.on{background:var(--navy);border-color:var(--navy);color:#fff}
+.kit-sw{width:13px;height:13px;border-radius:4px;border:2px solid #ccc;display:inline-block}
+
+/* 近 5 场 */
+.pd-sec{display:flex;align-items:center;justify-content:space-between;margin:16px 0 8px;
+  font-size:13.5px;font-weight:800;animation:pd-fade .5s ease .44s both}
+.pd-sec i{font-style:normal;font-size:11.5px;font-weight:400;color:var(--muted)}
+.pd-recent{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff;
+  animation:pd-fade .5s ease .5s both}
+.pd-r{display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid var(--line);
+  position:relative;font-size:13px}
+.pd-r:last-child{border-bottom:0}
+.pd-r::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:#8E9AAE}
+.pd-r.w::before{background:#0E9F6E}
+.pd-r.l::before{background:#E02424}
+.pd-rd{width:40px;flex:none;color:var(--muted);font-size:12px}
+.pd-ro{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.pd-rv{display:flex;gap:5px;flex:none}
+.pd-rv b{font-size:11px;font-weight:800;padding:1px 6px;border-radius:5px}
+.pd-rv b.g{background:#FFF3D6;color:var(--gold-d)}
+.pd-rv b.a{background:#E4EEFF;color:var(--blue)}
+.pd-rv b.y{background:#FFF0C2;color:#A87B00}
+.pd-rv b.r{background:#FDE3E3;color:#C81E1E}
+.pd-rv em{font-style:normal;font-size:11px;color:var(--muted)}
+
+/* 信息卡模式：内容区依次淡入，星光在弹窗内可见 */
+#sheet.pd-mode .sheet-bd{padding-top:6px}
+
+/* 尊重系统「减少动效」设置 */
+@media (prefers-reduced-motion:reduce){
+  .pd-glow,.pd-halo,.pd-stars,.pd-star,.pd-cv,.pd-name,.pd-badges,.pd-stats,.pd-kits,.pd-sec,.pd-recent,
+  #sheet.pd-mode{animation:none!important}
+}
+
 /* ===================== 手机友好优化 ===================== */
 /* iOS 上字号小于 16px 的输入框会触发页面自动缩放，这里统一 16px */
 .ipt,.sel{font-size:16px}

@@ -1,9 +1,9 @@
 /* 狮山实达数据统计 —— 离线缓存 */
-const CACHE = 'sclh-v6';
+const CACHE = 'sclh-v8';
 const ASSETS = [
   './', './index.html', './manifest.json',
   './css/style.css',
-  './js/config.js', './js/store.js', './js/poster.js', './js/app.js',
+  './js/config.js', './js/store.js', './js/poster.js', './js/jersey.js', './js/app.js',
   './vendor/supabase.js',
   './icons/icon-192.png', './icons/icon-512.png'
 ];

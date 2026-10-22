@@ -388,7 +388,7 @@
   }
   function closeSheet() {
     const s = $('#sheet'), m = $('#mask');
-    if (s) s.classList.remove('on');
+    if (s) { s.classList.remove('on'); s.classList.remove('pd-mode'); }
     if (m) m.classList.remove('on');
   }
   /* 安全绑定：元素不存在时只警告，不中断整个脚本 */
@@ -648,20 +648,145 @@
       };
     });
   }
-  function openPlayer(id) {
-    const p = playerById(id); if (!p) return;
-    if (!canEdit()) {
-      const g = board('goal').find(x => x.p.id === id), a = board('assist').find(x => x.p.id === id);
-      const app = board('app').find(x => x.p.id === id);
-      return openSheet('球员资料',
-        '<div style="text-align:center;padding:8px 0 14px">' + avatarHtml(p.name, p.avatar_url, 'c-av', p.number).replace('class="c-av c-num"', 'class="c-av c-num" style="width:76px;height:76px;font-size:22px;margin:0 auto"') + '</div>' +
-        '<div class="club-stats" style="border:1px solid var(--line);border-radius:12px;padding:12px;background:#fff;color:var(--txt)">' +
-        '<div class="st"><b style="color:var(--navy)">' + (g ? g.v : 0) + '</b><span>进球</span></div>' +
-        '<div class="st"><b style="color:var(--navy)">' + (a ? a.v : 0) + '</b><span>助攻</span></div>' +
-        '<div class="st"><b style="color:var(--navy)">' + (app ? app.v : 0) + '</b><span>出场</span></div></div>' +
-        '<div class="note" style="margin-top:12px">姓名：' + esc(p.name) + '<br>号码：' + esc(p.number || '-') + '<br>位置：' + esc(p.position || '-') +
-        '<br>入队：' + esc(p.joined_at || '-') + '</div>');
+  /* ---------------- 球员信息卡（星光动效 + 全身照） ---------------- */
+  const PD = { kit: 'home' };
+
+  /* 生成环绕星光：12 个光点，各自旋转半径 / 延迟不同 */
+  function starsHtml() {
+    const n = 12, out = [];
+    for (let i = 0; i < n; i++) {
+      const ang = (i / n) * 360;
+      const r = 96 + (i % 3) * 13;
+      const size = i % 3 === 0 ? 6 : i % 3 === 1 ? 4 : 3;
+      const delay = (i * 0.28).toFixed(2);
+      out.push('<i class="pd-star" style="--a:' + ang + 'deg;--r:' + r + 'px;--s:' + size + 'px;--d:' + delay + 's"></i>');
     }
+    return out.join('');
+  }
+
+  /* 球员近 N 场表现：出场即计入，显示该场进球/助攻 + 球队胜负 */
+  function playerRecent(p, n) {
+    const mine = ST.events.filter(e => e.player_id === p.id);
+    const ids = [];
+    mine.forEach(e => { if (e.match_id && ids.indexOf(e.match_id) < 0) ids.push(e.match_id); });
+    const ms = ids.map(id => ST.matches.find(m => m.id === id)).filter(Boolean)
+      .filter(m => m.status === 'finished')
+      .sort((a, b) => new Date(b.match_date || 0) - new Date(a.match_date || 0))
+      .slice(0, n || 5);
+    return ms.map(m => {
+      const evs = mine.filter(e => e.match_id === m.id);
+      const g = evs.filter(e => e.type === 'goal').reduce((s, e) => s + (Number(e.count) || 0), 0);
+      const a = evs.filter(e => e.type === 'assist').reduce((s, e) => s + (Number(e.count) || 0), 0);
+      const y = evs.filter(e => e.type === 'yellow').reduce((s, e) => s + (Number(e.count) || 0), 0);
+      const r = evs.filter(e => e.type === 'red').reduce((s, e) => s + (Number(e.count) || 0), 0);
+      const our = Number(m.our_score) || 0, opp = Number(m.opp_score) || 0;
+      const cls = our > opp ? 'w' : our < opp ? 'l' : 'd';
+      const d = new Date(m.match_date || 0);
+      const date = isNaN(d) ? '待定' : (d.getMonth() + 1) + '/' + d.getDate();
+      return { date: date, opp: m.opponent || '待定', g: g, a: a, y: y, r: r, cls: cls };
+    });
+  }
+
+  function openPlayerDetail(p) {
+    const g = board('goal').find(x => x.p.id === p.id);
+    const a = board('assist').find(x => x.p.id === p.id);
+    const ap = board('app').find(x => x.p.id === p.id);
+    const sh = board('shoot').find(x => x.p.id === p.id);
+    const rec = playerRecent(p, 5);
+
+    /* 球衣款式选择 */
+    const kits = (global.Jersey ? global.Jersey.KITS : []);
+    const kitBtns = kits.map(k =>
+      '<button class="kit' + (PD.kit === k.id ? ' on' : '') + '" data-k="' + k.id + '" title="' + esc(k.name) + '">' +
+      '<span class="kit-sw" style="background:' + k.main + ';border-color:' + k.accent + '"></span>' +
+      esc(k.name) + '</button>').join('');
+
+    const recentHtml = rec.length ? rec.map(r =>
+      '<div class="pd-r ' + r.cls + '">' +
+      '<span class="pd-rd">' + esc(r.date) + '</span>' +
+      '<span class="pd-ro">' + esc(r.opp) + '</span>' +
+      '<span class="pd-rv">' +
+      (r.g ? '<b class="g">' + r.g + '球</b>' : '') +
+      (r.a ? '<b class="a">' + r.a + '助</b>' : '') +
+      (r.y ? '<b class="y">' + r.y + '黄</b>' : '') +
+      (r.r ? '<b class="r">' + r.r + '红</b>' : '') +
+      (!r.g && !r.a && !r.y && !r.r ? '<em>出场</em>' : '') +
+      '</span></div>').join('')
+      : '<div class="empty" style="padding:12px 0">暂无出场记录</div>';
+
+    const sheet = $('#sheet');
+    if (sheet) sheet.classList.add('pd-mode');
+
+    openSheet(p.name || '球员',
+      '<div class="pd">' +
+      /* ---- 舞台：全身照 + 星光 ---- */
+      '<div class="pd-stage">' +
+      '<div class="pd-glow"></div>' +
+      '<div class="pd-halo"></div>' +
+      '<div class="pd-stars">' + starsHtml() + '</div>' +
+      '<div class="pd-body" id="pdBody"></div>' +
+      '</div>' +
+      /* ---- 姓名 / 号码 / 位置 ---- */
+      '<div class="pd-name">' + esc(p.name || '') + (p.active === false ? ' <span class="badge off">离队</span>' : '') + '</div>' +
+      '<div class="pd-badges">' +
+      '<span class="pd-num">#' + esc(p.number == null ? '-' : p.number) + '</span>' +
+      '<span class="pd-pos">' + esc(p.position || '位置待定') + '</span>' +
+      (p.joined_at ? '<span class="pd-join">入队 ' + esc(p.joined_at) + '</span>' : '') +
+      '</div>' +
+      /* ---- 本赛季数据 ---- */
+      '<div class="pd-stats">' +
+      '<div class="pd-st"><b>' + (ap ? ap.v : 0) + '</b><span>出场</span></div>' +
+      '<div class="pd-st"><b>' + (g ? g.v : 0) + '</b><span>进球</span></div>' +
+      '<div class="pd-st"><b>' + (a ? a.v : 0) + '</b><span>助攻</span></div>' +
+      '<div class="pd-st"><b>' + (sh ? sh.v : 0) + '</b><span>射门</span></div>' +
+      '</div>' +
+      /* ---- 球衣切换 ---- */
+      (global.Jersey ? '<div class="pd-kits">' + kitBtns + '</div>' : '') +
+      /* ---- 近 5 场 ---- */
+      '<div class="pd-sec"><span>近 5 场表现</span><i>共 ' + rec.length + ' 场</i></div>' +
+      '<div class="pd-recent">' + recentHtml + '</div>' +
+      /* ---- 管理员操作 ---- */
+      (canEdit() ? '<div class="acts" style="margin-top:14px">' +
+        '<button class="btn ghost" id="pd_edit">✏️ 编辑资料</button>' +
+        '<button class="btn red" id="pd_del">删除</button></div>' : '') +
+      '</div>', () => {
+
+        /* 画全身照 */
+        const paint = () => {
+          const box = $('#pdBody'); if (!box) return;
+          box.innerHTML = '';
+          let cv = null;
+          try { cv = global.Jersey.draw({ name: p.name, number: p.number, position: p.position, avatar: p.avatar_url, kit: PD.kit }, 2); }
+          catch (e) { console.error(e); }
+          if (cv) { cv.className = 'pd-cv'; box.appendChild(cv); }
+          else box.innerHTML = '<div class="pd-fallback">' + esc((p.name || '?').slice(0, 1)) + '</div>';
+        };
+        if (global.Jersey && p.avatar_url) {
+          global.Jersey.load(p.avatar_url).then(paint).catch(paint);
+        }
+        paint();
+
+        /* 切换球衣 */
+        $$('#sheetBody .kit').forEach(b => b.onclick = () => {
+          PD.kit = b.dataset.k;
+          $$('#sheetBody .kit').forEach(x => x.classList.toggle('on', x === b));
+          paint();
+        });
+
+        if ($('#pd_edit')) $('#pd_edit').onclick = () => { closeSheet(); openPlayerEdit(p.id); };
+        if ($('#pd_del')) $('#pd_del').onclick = async () => {
+          if (!confirm('确定删除该球员？其进球/助攻记录也会移除')) return;
+          await Store.removeWhere('events', 'player_id', p.id);
+          await Store.remove('players', p.id);
+          closeSheet(); refresh('已删除');
+        };
+      });
+  }
+
+  /* 管理员编辑（从信息卡进入） */
+  function openPlayerEdit(id) {
+    const p = playerById(id); if (!p) return;
+    if (!requireAdmin()) return;
     openSheet('编辑球员', playerForm(p, false), () => {
       segBind('#p_act'); bindAvatarPicker();
       $('#p_save').onclick = async () => {
@@ -680,6 +805,16 @@
         closeSheet(); refresh('已删除');
       };
     });
+  }
+
+  function openPlayer(id) {
+    const p = playerById(id); if (!p) return;
+    if (canEdit()) {
+      /* 管理员：先看信息卡，卡里有「编辑」按钮 */
+      return openPlayerDetail(p);
+    }
+    /* 只读：直接看信息卡 */
+    openPlayerDetail(p);
   }
 
   /* ---------------- 场地 ---------------- */
