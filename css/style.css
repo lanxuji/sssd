@@ -387,6 +387,20 @@ textarea.ipt{height:auto;padding:9px 11px;line-height:1.6}
   #sheet.pd-mode{animation:none!important}
 }
 
+/* 微信内打开时的顶部提示条 */
+body.has-wxtip{padding-top:calc(var(--bar-h) + 38px)}
+.wx-tip{position:fixed;top:var(--bar-h);left:0;right:0;z-index:59;
+  display:flex;align-items:center;gap:8px;padding:7px 12px;font-size:12.5px;
+  background:rgba(242,183,5,.20);color:#6B4A00;
+  -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+  border-bottom:1px solid rgba(242,183,5,.34);
+  transition:opacity .5s;animation:wx-in .35s ease both}
+.wx-tip.fade{opacity:.55}
+.wx-tip span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wx-tip b{flex:none;font-size:12.5px;color:var(--navy);font-weight:800}
+.wx-tip i{flex:none;font-style:normal;font-size:15px;opacity:.55;padding:0 2px}
+@keyframes wx-in{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+
 /* 版本号标记：顶部状态栏一行小字，点 5 次复制诊断信息 */
 .vertag{font-style:normal;display:inline-block;margin-left:5px;padding:0 5px;border-radius:6px;
   background:rgba(255,255,255,.16);color:#fff;font-size:10px;font-weight:700;letter-spacing:.3px;

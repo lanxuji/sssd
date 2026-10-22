@@ -24,7 +24,7 @@
   });
 
   /* ★ 版本号：改代码时记得 +1，用于确认用户浏览器拿到的是不是最新版 */
-  const APP_VER = 'v14';
+  const APP_VER = 'v16';
   /* 实际生效的 Service Worker 缓存版本（从 sw.js 里读出来） */
   let SW_VER = '';
   async function readSwVer() {
@@ -262,8 +262,14 @@
   }
 
   function renderHomeFixtures() {
-    const up = ST.matches.filter(m => m.status === 'upcoming').sort((a, b) => new Date(a.match_date || 9e15) - new Date(b.match_date || 9e15)).slice(0, 2);
-    const fin = finishedMatches().slice(0, 2);
+    /* 首页只显示最新 5 场：
+       优先放最近的 2 场未开赛（未来赛程要看得见），
+       剩余名额用最近已结束的比赛补足。 */
+    const HOME_N = 5, UP_N = 2;
+    const up = ST.matches.filter(m => m.status === 'upcoming')
+      .sort((a, b) => new Date(a.match_date || 9e15) - new Date(b.match_date || 9e15))
+      .slice(0, UP_N);
+    const fin = finishedMatches().slice(0, Math.max(0, HOME_N - up.length));
     const list = up.concat(fin);
     $('#homeFixtures').innerHTML = list.length ? list.map(m => fixtureRow(m)).join('') :
       '<div class="empty"><i>📅</i>暂无赛程，点击右上角 ⚙️ 登录后可添加</div>';
@@ -973,7 +979,9 @@
           } else if (u === R.user && p === R.pass) {
             setLogin('recorder', u); closeSheet(); renderNav(); renderAll();
             go('record'); toast('录入员登录成功，可直接录入');
-          } else toast('账号或密码不正确');
+          } else { toast('账号或密码不正确'); return; }
+          /* 角色变了，若当前停在无权访问的页面，退回首页 */
+          if (allowedViews().indexOf(ST.view) < 0) go('home');
         };
         $('#l_pass').onkeydown = e => { if (e.key === 'Enter') $('#l_go').click(); };
       });
@@ -1097,18 +1105,66 @@
       });
   }
 
+  /* 是否在微信内置浏览器里打开 */
+  function inWeChat() { return /MicroMessenger/i.test(navigator.userAgent || ''); }
+
+  /* 复制网址到剪贴板（带降级方案） */
+  function copyLink(text, okMsg) {
+    const done = () => toast(okMsg || '网址已复制，去微信粘贴发给队友');
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(fallback); return;
+      }
+    } catch (e) { }
+    fallback();
+    function fallback() {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); done(); }
+      catch (e) { toast('复制失败，请长按地址栏手动复制'); }
+      document.body.removeChild(ta);
+    }
+  }
+
   function openInstall() {
+    const wx = inWeChat();
     openSheet('安装到手机桌面',
+      (wx ? '<div class="note" style="background:rgba(242,183,5,.14);border-color:rgba(242,183,5,.4)">' +
+        '<b>⚠️ 你正在微信里打开</b><br>微信不支持「添加到桌面」。<br>' +
+        '请点微信右上角 <b>···</b> → <b>在浏览器打开</b>，再按下面步骤操作。</div>' : '') +
       '<div class="note"><b>iPhone（Safari）</b><br>1. 用 Safari 打开本页<br>2. 点击底部「分享」按钮 <b>⬆️</b><br>3. 选择「添加到主屏幕」<br>4. 确认后桌面出现图标，点开即全屏运行，和 App 一样</div>' +
       '<div class="note"><b>安卓（Chrome / 夸克 /  Edge）</b><br>1. 打开本页后点击右上角菜单 <b>⋮</b><br>2. 选择「添加到主屏幕 / 安装应用」<br>3. 确认即可</div>' +
-      '<div class="note"><b>多人共享</b><br>把网址发给队友，所有人打开看到的都是同一份云端数据；只有输入管理密码的人才能修改。</div>' +
-      '<div style="margin-top:8px"><button class="btn wide" id="i_try">' + (deferredPrompt ? '一键安装' : '已支持添加到桌面') + '</button></div>', () => {
+      '<div class="note"><b>发微信给队友</b><br>直接把网址发到群里，对方点开就能看（会显示成一张卡片）。所有人看到的是同一份云端数据，只有输入管理密码的人才能修改。</div>' +
+      '<div style="margin-top:8px"><button class="btn wide" id="i_try">' + (deferredPrompt ? '一键安装' : '已支持添加到桌面') + '</button></div>' +
+      '<div style="margin-top:8px"><button class="btn wide ghost" id="i_copy">📋 复制网址</button></div>', () => {
         $('#i_try').onclick = async () => {
           if (!deferredPrompt) return toast('请按上方步骤在浏览器菜单中添加');
           deferredPrompt.prompt(); const r = await deferredPrompt.userChoice; deferredPrompt = null;
           if (r && r.outcome === 'accepted') toast('已添加到桌面');
         };
+        $('#i_copy').onclick = () => copyLink(global.location.href.split('#')[0]);
       });
+  }
+
+  /* 微信内首次打开：顶部提示条，引导去浏览器打开后可装桌面 */
+  function wechatTip() {
+    if (!inWeChat()) return;
+    if (sessionStorage.getItem('wxTipOff')) return;
+    const bar = document.createElement('div');
+    bar.className = 'wx-tip';
+    bar.innerHTML = '<span>微信内无法「添加到桌面」</span>' +
+      '<b id="wx_how">怎么装？</b>' +
+      '<i id="wx_x">✕</i>';
+    document.body.appendChild(bar);
+    document.body.classList.add('has-wxtip');
+    $('#wx_x').onclick = () => {
+      sessionStorage.setItem('wxTipOff', '1');
+      document.body.classList.remove('has-wxtip');
+      bar.remove();
+    };
+    $('#wx_how').onclick = () => openInstall();
+    setTimeout(() => { if (bar.parentNode) { bar.classList.add('fade'); } }, 6000);
   }
 
   function openCloudGuide() {
@@ -1455,25 +1511,41 @@
   }
 
   /* ---------------- 导航 ---------------- */
+  /* 权限规则：
+     游客（未登录） → 首页 / 赛程 / 榜单
+     录入员        → 首页 / 录入 / 赛程 / 榜单
+     管理员        → 全部 */
   const NAV = [
     { v: 'home', i: '🏠', t: '首页', always: true },
     { v: 'record', i: '📝', t: '录入', role: 'rec' },
     { v: 'fixtures', i: '📅', t: '赛程', always: true },
     { v: 'stats', i: '🏆', t: '榜单', always: true },
-    { v: 'players', i: '👥', t: '球员', always: true },
-    { v: 'venues', i: '⚽', t: '场地', always: true }
+    { v: 'players', i: '👥', t: '球员', role: 'admin' },
+    { v: 'venues', i: '⚽', t: '场地', role: 'admin' }
   ];
-  /* 渲染底部导航：录入员/管理员多一个「录入」 */
+
+  /* 当前角色能进哪些页面 */
+  function allowedViews() {
+    return NAV.filter(n => n.always || (n.role === 'rec' && canRecord()) || (n.role === 'admin' && canEdit()))
+      .map(n => n.v);
+  }
+
+  /* 渲染底部导航：按角色显示 */
   function renderNav() {
     const bar = $('#tabbar');
-    const list = NAV.filter(n => n.always || (n.role === 'rec' && canRecord()));
+    const list = NAV.filter(n => n.always || (n.role === 'rec' && canRecord()) || (n.role === 'admin' && canEdit()));
     bar.innerHTML = list.map(n =>
       '<button class="tbtn' + (ST.view === n.v ? ' active' : '') + '" data-view="' + n.v + '">' +
       '<i>' + n.i + '</i><span>' + n.t + '</span></button>').join('');
     $$('#tabbar .tbtn').forEach(b => b.onclick = () => go(b.dataset.view));
   }
-  /* 切换页面 */
+  /* 切换页面（带权限校验：非管理员访问球员/场地会被挡回首页） */
   function go(v) {
+    const ok = allowedViews();
+    if (ok.indexOf(v) < 0) {
+      toast(v === 'players' || v === 'venues' ? '该功能仅管理员可见' : '请先登录');
+      v = 'home';
+    }
     ST.view = v;
     $$('.view').forEach(x => x.classList.remove('active'));
     const el = $('#view-' + v); if (el) el.classList.add('active');
@@ -1548,6 +1620,7 @@
     }
     if (!diag.supabase) console.warn('[狮山实达] vendor/supabase.js 未加载 → 无法连云端（请确认该文件已上传）');
     if (!diag.Poster) console.warn('[狮山实达] js/poster.js 未加载 → 截图不可用（请确认该文件已上传）');
+    try { wechatTip(); } catch (e) { console.warn('微信提示未显示', e); }
   })();
 
   window.__SCLH = { ST: ST, refresh: refresh };
