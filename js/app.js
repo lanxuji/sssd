@@ -1434,6 +1434,7 @@
       云端地址: Store.cfg.url || '(未配置)'
     };
     console.log('[狮山实达] 环境自检', diag);
+    diag.版本 = 'v9';
     global.__DIAG = diag;
     if (!diag.supabase) console.warn('[狮山实达] vendor/supabase.js 未加载 → 无法连云端（请确认该文件已上传）');
     if (!diag.Poster) console.warn('[狮山实达] js/poster.js 未加载 → 截图不可用（请确认该文件已上传）');

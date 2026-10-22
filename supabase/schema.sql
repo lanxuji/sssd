@@ -1,5 +1,5 @@
 -- ============================================================
---  狮城联合数据统计 —— Supabase 建表脚本
+--  狮山实达数据统计 —— Supabase 建表脚本
 --  用法：Supabase 控制台 → 左侧 SQL Editor → New query → 粘贴 → Run
 --  执行顺序无所谓，可重复执行（已用 IF NOT EXISTS / DROP POLICY IF EXISTS）
 -- ============================================================
@@ -103,8 +103,12 @@ end $$;
 grant usage on schema public to anon, authenticated;
 grant all on all tables in schema public to anon, authenticated;
 
--- 初始化球队资料行
+-- 初始化球队资料行（on conflict do nothing：已存在则保留，不会覆盖你改过的内容）
 insert into public.team_profile (id, name, slogan, founded, home_venue, intro)
-values ('1', '狮城联合足球俱乐部', '以狮之名，联合致胜', '2021', '佛山世纪莲体育中心',
-        '狮城联合足球俱乐部成立于2021年，由一群热爱足球的佛山本地球友自发组建。球队坚持每周一练、周末一战，欢迎各路球队约战。')
+values ('1', '狮山实达足球俱乐部', '狮山实达，实干致胜', '2021', '佛山世纪莲体育中心',
+        '狮山实达足球俱乐部。')
 on conflict (id) do nothing;
+
+-- ⚠️ 老项目升级：如果之前建库时写入过旧队名（狮城联合），跑下面这句纠正
+-- update public.team_profile set name='狮山实达足球俱乐部', slogan='狮山实达，实干致胜'
+--  where id='1' and (name like '%狮城联合%' or slogan like '%联合致胜%');
