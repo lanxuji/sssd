@@ -24,6 +24,7 @@ create table if not exists public.players (
   position    text,
   phone       text,
   avatar_url  text,
+  fullbody_url text,                     -- 真实全身照（填了就不再用合成形象）
   joined_at   date,
   active      boolean default true,
   created_at  timestamptz default now()

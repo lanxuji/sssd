@@ -23,6 +23,21 @@
     try { toast('出错了：' + ((e.reason && e.reason.message) || '网络或数据异常')); } catch (_) { }
   });
 
+  /* ★ 版本号：改代码时记得 +1，用于确认用户浏览器拿到的是不是最新版 */
+  const APP_VER = 'v10';
+  /* 实际生效的 Service Worker 缓存版本（从 sw.js 里读出来） */
+  let SW_VER = '';
+  async function readSwVer() {
+    try {
+      const res = await fetch('sw.js', { cache: 'no-store' });
+      const txt = await res.text();
+      const m = txt.match(/CACHE\s*=\s*'([^']+)'/);
+      SW_VER = m ? m[1] : '?';
+    } catch (e) { SW_VER = '?'; }
+    return SW_VER;
+  }
+  readSwVer();
+
   const W = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
   /* 赛事类型 */
@@ -610,13 +625,39 @@
       '<div class="fld"><label>位置</label><input class="ipt" id="p_pos" value="' + esc(p.position || '') + '" placeholder="前锋/中场/后卫/门将"></div></div>' +
       '<div class="fld"><label>联系电话（可留空）</label><input class="ipt" id="p_phone" value="' + esc(p.phone || '') + '"></div>' +
       '<div class="fld"><label>入队日期</label><input class="ipt" type="date" id="p_join" value="' + esc(p.joined_at || '') + '"></div>' +
-      '<div class="fld"><label>头像</label><div class="row2"><div><input class="ipt" id="p_avatar" placeholder="图片网址" value="' + esc((p.avatar_url || '').slice(0, 30) === 'data:image' ? '' : (p.avatar_url || '')) + '"></div>' +
+      '<div class="fld"><label>头像（脸部特写，用于合成头部）</label><div class="row2"><div><input class="ipt" id="p_avatar" placeholder="图片网址" value="' + esc((p.avatar_url || '').slice(0, 30) === 'data:image' ? '' : (p.avatar_url || '')) + '"></div>' +
       '<div><input type="file" accept="image/*" id="p_file" class="ipt" style="padding:7px 8px;font-size:12px"></div></div></div>' +
+      '<div class="fld"><label>全身照（选填，填了就用真实照片，不再合成）</label><div class="row2"><div><input class="ipt" id="p_full" placeholder="图片网址" value="' + esc((p.fullbody_url || '').slice(0, 30) === 'data:image' ? '' : (p.fullbody_url || '')) + '"></div>' +
+      '<div><input type="file" accept="image/*" id="p_fullfile" class="ipt" style="padding:7px 8px;font-size:12px"></div></div>' +
+      '<div class="note" style="margin-top:6px">拍一张正面全身站立照，效果最真实。不填则用「头像 + 球衣」自动合成卡通形象。</div></div>' +
       '<div class="fld"><label>状态</label><div class="seg" id="p_act"><button data-v="1" class="' + (p.active === false ? '' : 'on') + '">在队</button><button data-v="0" class="' + (p.active === false ? 'on' : '') + '">离队</button></div></div>' +
       (isNew ? '<div class="acts"><button class="btn" id="p_save">添加球员</button></div>'
         : '<div class="acts"><button class="btn" id="p_save">保存</button><button class="btn red" id="p_del">删除</button></div>');
   }
+  /* 读图 → 压缩 → 转 dataURL（避免超长字符串撑爆数据库） */
+  function pickImage(fileInput, targetId, maxSide, quality, tip) {
+    const f = $(fileInput); if (!f) return;
+    f.onchange = () => {
+      const file = f.files[0]; if (!file) return;
+      const img = new Image(); const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const c = document.createElement('canvas');
+        const s = Math.min(img.width, img.height);
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        c.width = Math.round(img.width * scale);
+        c.height = Math.round(img.height * scale);
+        const ctx = c.getContext('2d');
+        ctx.drawImage(img, 0, 0, c.width, c.height);
+        $(targetId).value = c.toDataURL('image/jpeg', quality);
+        URL.revokeObjectURL(url);
+        toast(tip || '图片已读取，点保存生效');
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); toast('图片读取失败'); };
+      img.src = url;
+    };
+  }
   function bindAvatarPicker() {
+    /* 头像：裁成正方形 256 */
     const f = $('#p_file'); if (!f) return;
     f.onchange = () => {
       const file = f.files[0]; if (!file) return;
@@ -629,8 +670,11 @@
         $('#p_avatar').value = c.toDataURL('image/jpeg', 0.78);
         URL.revokeObjectURL(url); toast('头像已读取，点保存生效');
       };
+      img.onerror = () => { URL.revokeObjectURL(url); toast('图片读取失败'); };
       img.src = url;
     };
+    /* 全身照：保留竖版比例，长边压到 600 */
+    pickImage('#p_fullfile', '#p_full', 600, 0.8, '全身照已读取，点保存生效');
   }
   function openPlayerNew() {
     if (!requireAdmin()) return;
@@ -642,6 +686,7 @@
           name: n, number: $('#p_num').value === '' ? null : Number($('#p_num').value),
           position: $('#p_pos').value.trim(), phone: $('#p_phone').value.trim(),
           avatar_url: $('#p_avatar').value.trim(), joined_at: $('#p_join').value,
+          fullbody_url: $('#p_full') ? $('#p_full').value.trim() : '',
           active: $('#p_act button.on').dataset.v === '1'
         });
         closeSheet(); refresh('球员已添加');
@@ -751,8 +796,23 @@
         '<button class="btn red" id="pd_del">删除</button></div>' : '') +
       '</div>', () => {
 
-        /* 画全身照 */
+        /* 画全身照：优先用真实照片，没有才合成 */
         const paint = () => {
+          const box = $('#pdBody'); if (!box) return;
+          box.innerHTML = '';
+          /* ① 真实全身照 */
+          if (p.fullbody_url) {
+            const img = document.createElement('img');
+            img.className = 'pd-cv pd-photo';
+            img.src = p.fullbody_url;
+            img.alt = p.name || '';
+            img.onerror = () => { img.remove(); drawSynthetic(); };
+            box.appendChild(img);
+            return;
+          }
+          drawSynthetic();
+        };
+        const drawSynthetic = () => {
           const box = $('#pdBody'); if (!box) return;
           box.innerHTML = '';
           let cv = null;
@@ -766,12 +826,17 @@
         }
         paint();
 
-        /* 切换球衣 */
-        $$('#sheetBody .kit').forEach(b => b.onclick = () => {
-          PD.kit = b.dataset.k;
-          $$('#sheetBody .kit').forEach(x => x.classList.toggle('on', x === b));
-          paint();
-        });
+        /* 切换球衣（只对合成形象生效） */
+        const kitBox = $$('#sheetBody .kit');
+        if (p.fullbody_url) {
+          kitBox.forEach(b => { b.style.display = 'none'; });
+        } else {
+          kitBox.forEach(b => b.onclick = () => {
+            PD.kit = b.dataset.k;
+            $$('#sheetBody .kit').forEach(x => x.classList.toggle('on', x === b));
+            paint();
+          });
+        }
 
         if ($('#pd_edit')) $('#pd_edit').onclick = () => { closeSheet(); openPlayerEdit(p.id); };
         if ($('#pd_del')) $('#pd_del').onclick = async () => {
@@ -794,6 +859,7 @@
           name: $('#p_name').value.trim(), number: $('#p_num').value === '' ? null : Number($('#p_num').value),
           position: $('#p_pos').value.trim(), phone: $('#p_phone').value.trim(),
           avatar_url: $('#p_avatar').value.trim(), joined_at: $('#p_join').value,
+          fullbody_url: $('#p_full') ? $('#p_full').value.trim() : (p.fullbody_url || ''),
           active: $('#p_act button.on').dataset.v === '1'
         });
         closeSheet(); refresh('已保存');
@@ -911,6 +977,9 @@
       '<div style="margin-top:9px"><button class="btn wide ' + (Store.isCloud() ? 'ghost' : 'gold') + '" id="a_connect">' + (Store.isCloud() ? '☁️ 云端设置 / 生成分享链接' : '☁️ 连接云端数据库') + '</button></div>' +
       '<div style="margin-top:9px"><button class="btn wide ghost" id="a_export">📤 导出备份（JSON）</button></div>' +
       '<div style="margin-top:9px"><button class="btn wide ghost" id="a_import">📥 导入备份</button></div>' +
+      '<div class="admin-item"><div class="ai-l"><b>版本</b><small>代码 ' + APP_VER + ' · 离线缓存 ' + (SW_VER || '未知') +
+      '<br>不一致时强制刷新页面（Ctrl+Shift+R）</small></div>' +
+      '<button class="btn sm ghost" id="a_reload">刷新</button></div>' +
       '<div style="margin-top:9px"><button class="btn wide ghost" id="a_fix">🔧 检查云端表结构</button></div>' +
       '<div style="margin-top:9px"><button class="btn wide ghost" id="a_install">📱 安装到手机桌面</button></div>' +
       '<div style="margin-top:9px"><button class="btn wide ghost" id="a_cloud">☁️ 云端配置指引</button></div>' +
@@ -940,6 +1009,12 @@
           inp.click();
         };
         $('#a_install').onclick = () => { closeSheet(); openInstall(); };
+        $('#a_reload').onclick = () => {
+          if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+            navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()));
+          }
+          setTimeout(() => global.location.reload(true), 300);
+        };
         $('#a_fix').onclick = async () => {
           if (!Store.isCloud()) { closeSheet(); return openCloudGuide(); }
           const b = $('#a_fix'); const old = b.textContent; b.textContent = '检查中…'; b.disabled = true;
@@ -1433,9 +1508,29 @@
       数据模式: mode,
       云端地址: Store.cfg.url || '(未配置)'
     };
+    diag.版本 = APP_VER;
+    let verTap = 0;
     console.log('[狮山实达] 环境自检', diag);
-    diag.版本 = 'v9';
     global.__DIAG = diag;
+    /* 页面上也标出来，点 5 次可复制完整诊断信息 */
+    const vt = $('#verTag');
+    if (vt) {
+      vt.textContent = APP_VER;
+      vt.onclick = () => {
+        verTap++;
+        if (verTap >= 5) {
+          verTap = 0;
+          const txt = JSON.stringify(diag, null, 1);
+          try {
+            const ta = document.createElement('textarea');
+            ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
+            document.body.appendChild(ta); ta.select();
+            document.execCommand('copy'); document.body.removeChild(ta);
+            toast('诊断信息已复制');
+          } catch (e) { console.log(txt); toast('请到控制台查看 __DIAG'); }
+        }
+      };
+    }
     if (!diag.supabase) console.warn('[狮山实达] vendor/supabase.js 未加载 → 无法连云端（请确认该文件已上传）');
     if (!diag.Poster) console.warn('[狮山实达] js/poster.js 未加载 → 截图不可用（请确认该文件已上传）');
   })();

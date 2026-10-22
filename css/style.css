@@ -282,6 +282,10 @@ textarea.ipt{height:auto;padding:9px 11px;line-height:1.6}
 .pd-body{position:relative;z-index:3;display:flex;align-items:flex-end;justify-content:center;height:100%}
 .pd-cv{height:272px;width:auto;display:block;
   animation:pd-in .62s cubic-bezier(.22,1.3,.36,1) both;filter:drop-shadow(0 6px 14px rgba(20,38,90,.18))}
+/* 真实照片：保持比例、底部对齐，加底部淡出让边缘融进背景 */
+.pd-photo{object-fit:contain;object-position:bottom;max-height:284px;max-width:100%;
+  -webkit-mask-image:linear-gradient(to bottom,#000 78%,transparent 100%);
+  mask-image:linear-gradient(to bottom,#000 78%,transparent 100%)}
 @keyframes pd-in{
   from{opacity:0;transform:translateY(26px) scale(.9)}
   to{opacity:1;transform:translateY(0) scale(1)}
@@ -343,6 +347,11 @@ textarea.ipt{height:auto;padding:9px 11px;line-height:1.6}
   .pd-glow,.pd-halo,.pd-stars,.pd-star,.pd-cv,.pd-name,.pd-badges,.pd-stats,.pd-kits,.pd-sec,.pd-recent,
   #sheet.pd-mode{animation:none!important}
 }
+
+/* 版本号标记：顶部状态栏一行小字，点 5 次复制诊断信息 */
+.vertag{font-style:normal;display:inline-block;margin-left:5px;padding:0 5px;border-radius:6px;
+  background:rgba(255,255,255,.16);color:#fff;font-size:10px;font-weight:700;letter-spacing:.3px;
+  vertical-align:middle;cursor:pointer}
 
 /* ===================== 手机友好优化 ===================== */
 /* iOS 上字号小于 16px 的输入框会触发页面自动缩放，这里统一 16px */

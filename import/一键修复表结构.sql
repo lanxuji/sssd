@@ -38,6 +38,7 @@ alter table public.players add column if not exists number     int;
 alter table public.players add column if not exists position   text;
 alter table public.players add column if not exists phone      text;
 alter table public.players add column if not exists avatar_url text;
+alter table public.players add column if not exists fullbody_url text;
 alter table public.players add column if not exists joined_at  date;
 alter table public.players add column if not exists active     boolean default true;
 alter table public.players add column if not exists created_at timestamptz default now();
