@@ -430,8 +430,21 @@ body.has-wxtip{padding-top:calc(var(--bar-h) + 38px)}
 .score-row .ipt{flex:1;text-align:center;font-weight:800;font-size:20px}
 .score-row .vs{font-size:22px;font-weight:800;color:var(--muted);flex:none}
 /* 录入页卡片去掉多余内边距，方便单手操作 */
-.block.rc{padding:16px 14px}
-.block.rc .fld{margin-bottom:14px}
+.block.rc{padding:14px 12px}
+.block.rc .fld{margin-bottom:10px}
+/* 紧凑：一行放两个字段（日期 / 场地，对手 / 比分） */
+.fld-row{display:flex;gap:9px;margin-bottom:10px}
+.fld-row>.fld{flex:1;min-width:0;margin-bottom:0}
+/* 比分框固定宽度，避免挤扁对手输入框 */
+.rc-score{width:126px;flex:none}
+.rc-score .score-row{gap:6px}
+.rc-score .score-row .ipt{font-size:17px;padding:0 6px;height:44px}
+.rc-score .vs{font-size:17px}
+/* 继续录入选择器 */
+.rc-pick{margin-bottom:12px}
+.rc-pick select{font-weight:600}
+/* 输入框去掉预填提示后的留白仍要够大，方便点按 */
+.block.rc .ipt{height:44px}
 /* 底部导航加高，文字更清楚 */
 .tabbar{height:62px}
 .tbtn i{font-size:22px}

@@ -7,8 +7,8 @@
   'use strict';
 
   const FONT = '"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Helvetica Neue",Arial,sans-serif';
-  const NAVY = '#14265A', NAVY2 = '#20397F', GOLD = '#F2B705', GOLD_D = '#C89204';
-  const TXT = '#1B2338', MUTED = '#7A8399', LINE = '#E8EBF2', CARD = '#FFFFFF', BG = '#EEF1F7';
+  const NAVY = '#0B5F42', NAVY2 = '#0E8B60', GOLD = '#F2B705', GOLD_D = '#C89204';
+  const TXT = '#0B3B2C', MUTED = '#6B8A7C', LINE = 'rgba(11,95,66,.14)', CARD = 'rgba(255,255,255,.72)', BG = '#F4F8F6';
 
   /* ---------- 绘图小工具 ---------- */
   function rr(ctx, x, y, w, h, r) {

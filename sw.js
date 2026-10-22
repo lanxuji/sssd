@@ -5,7 +5,7 @@
  *   现改为：页面/脚本走「网络优先」——先拿最新的，网络不通时才用缓存（离线仍可打开）。
  *   图片/图标走「缓存优先」，加快加载。
  */
-const CACHE = 'sclh-v16';
+const CACHE = 'sclh-v18';
 const ASSETS = [
   './', './index.html', './manifest.json',
   './css/style.css',

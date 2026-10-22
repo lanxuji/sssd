@@ -24,7 +24,7 @@
   });
 
   /* ★ 版本号：改代码时记得 +1，用于确认用户浏览器拿到的是不是最新版 */
-  const APP_VER = 'v16';
+  const APP_VER = 'v18';
   /* 实际生效的 Service Worker 缓存版本（从 sw.js 里读出来） */
   let SW_VER = '';
   async function readSwVer() {
@@ -1256,10 +1256,11 @@
     const r = record();
     const COMP_COLOR = { '联赛': '#1D4ED8', '杯赛': '#7C3AED', '友谊赛': '#0E9F6E', '内部赛': '#C89204' };
 
-    /* 近期赛程：未来 2 场 + 最近 2 场 */
+    /* 近期赛程：与首页一致 —— 未来 2 场 + 最近已结束补足到 5 场 */
+    const SHOT_N = 5, SHOT_UP = 2;
     const up = ST.matches.filter(m => m.status === 'upcoming')
-      .sort((a, b) => new Date(a.match_date || 9e15) - new Date(b.match_date || 9e15)).slice(0, 2);
-    const list = up.concat(finishedMatches().slice(0, 2));
+      .sort((a, b) => new Date(a.match_date || 9e15) - new Date(b.match_date || 9e15)).slice(0, SHOT_UP);
+    const list = up.concat(finishedMatches().slice(0, Math.max(0, SHOT_N - up.length)));
     const fixtures = list.map(m => {
       const db = dayBlock(m.match_date);
       const fin = m.status === 'finished';
@@ -1278,8 +1279,8 @@
       };
     });
 
-    /* 榜单 */
-    const toRows = arr => arr.slice(0, 5).map(x => ({
+    /* 榜单：与首页一致 —— 有数据的球员全部列出（不再截断到 5 行） */
+    const toRows = arr => arr.map(x => ({
       name: x.p.name, number: x.p.number, position: x.p.position,
       avatar: x.p.avatar_url, v: x.v
     }));
@@ -1370,7 +1371,7 @@
 
   /* ---------------- 录入界面（录入员专用，极简） ---------------- */
   /* 当前正在录入的内容 */
-  const RC = { goals: [{ p: '', n: 1 }], assists: [{ p: '', n: 1 }] };
+  const RC = { mid: '', goals: [{ p: '', n: 1 }], assists: [{ p: '', n: 1 }] };
 
   function playerOpts(sel) {
     return ST.players.filter(p => p.active !== false).map(p =>
@@ -1388,6 +1389,12 @@
     return rows.map((r, i) => evRowHtml(kind, i, r)).join('');
   }
 
+  /* 未完成（未开赛）的比赛，供「继续录入」选择 */
+  function pendingMatches() {
+    return ST.matches.filter(m => m.status === 'upcoming')
+      .sort((a, b) => new Date(a.match_date || 9e15) - new Date(b.match_date || 9e15));
+  }
+
   function renderRecord() {
     const el = $('#recordBody');
     if (!el) return;
@@ -1403,19 +1410,35 @@
         '<div class="note" style="margin-top:10px">请先让管理员在「球员」页添加球员，之后才能录入进球与助攻。</div></div>';
       return;
     }
+    const pend = pendingMatches();
     const vOpts = ST.venues.map(v => '<option value="' + esc(v.id) + '">' + esc(v.name) + '</option>').join('');
     const now = new Date(); now.setHours(19, 30, 0, 0);
+
     el.innerHTML =
       '<div class="block rc">' +
-        '<div class="block-hd"><h3>本场比赛</h3><span class="block-sub">必填</span></div>' +
-        '<div class="fld"><label>比赛日期</label><input class="ipt big" type="datetime-local" id="rc_date" value="' + toLocalInput(now.toISOString()) + '"></div>' +
-        '<div class="fld"><label>场地</label><select class="ipt big" id="rc_venue"><option value="">未指定</option>' + vOpts + '</select></div>' +
-        '<div class="fld"><label>对手</label><input class="ipt big" id="rc_opp" placeholder="对手队名"></div>' +
-        '<div class="fld"><label>比分</label><div class="score-row">' +
-          '<input class="ipt big" type="number" inputmode="numeric" id="rc_our" placeholder="我方" value="0">' +
-          '<span class="vs">:</span>' +
-          '<input class="ipt big" type="number" inputmode="numeric" id="rc_opp2" placeholder="对手" value="0">' +
-        '</div></div>' +
+        '<div class="block-hd"><h3>本场比赛</h3><span class="block-sub" id="rc_mode">新录入</span></div>' +
+        (pend.length ? '<div class="fld rc-pick">' +
+          '<label>继续未完成的比赛（' + pend.length + ' 场）</label>' +
+          '<select class="ipt" id="rc_pick"><option value="">＋ 新录一场</option>' +
+          pend.map(m => {
+            const d = new Date(m.match_date || 0);
+            const dt = isNaN(d) ? '待定' : (d.getMonth() + 1) + '/' + d.getDate();
+            return '<option value="' + esc(m.id) + '">' + esc(dt + ' vs ' + (m.opponent || '待定')) + '</option>';
+          }).join('') +
+          '</select></div>' : '') +
+        '<div class="fld-row">' +
+          '<div class="fld"><label>日期</label><input class="ipt" type="datetime-local" id="rc_date" value="' + toLocalInput(now.toISOString()) + '"></div>' +
+          '<div class="fld"><label>场地</label><select class="ipt" id="rc_venue"><option value="">未指定</option>' + vOpts + '</select></div>' +
+        '</div>' +
+        '<div class="fld-row">' +
+          '<div class="fld"><label>对手</label><input class="ipt" id="rc_opp"></div>' +
+          '<div class="fld rc-score"><label>比分</label><div class="score-row">' +
+            '<input class="ipt" type="number" inputmode="numeric" id="rc_our">' +
+            '<span class="vs">:</span>' +
+            '<input class="ipt" type="number" inputmode="numeric" id="rc_opp2">' +
+          '</div></div>' +
+        '</div>' +
+        '<button class="btn wide ghost" id="rc_cancel" style="display:none;margin-top:2px">取消继续录入，回到新录一场</button>' +
       '</div>' +
       '<div class="block rc">' +
         '<div class="block-hd"><h3>进球</h3><span class="block-sub" id="rc_gsum">共 0 球</span></div>' +
@@ -1457,6 +1480,51 @@
       const box = kind === 'goals' ? '#rc_goals' : '#rc_assists';
       $(box).innerHTML = evRowsHtml(kind); bind(); updSum();
     };
+
+    /* ---- 继续录入：选中未完成的比赛，把已有信息带进表单 ---- */
+    const setMode = txt => {
+      const m = $('#rc_mode'); if (m) m.textContent = txt;
+      const b = $('#rc_save'); if (b) b.textContent = txt === '新录入' ? '✓ 保存这场比赛' : '✓ 更新这场比赛';
+    };
+    const resetForm = () => {
+      RC.mid = '';
+      RC.goals = [{ p: '', n: 1 }]; RC.assists = [{ p: '', n: 1 }];
+      $('#rc_date').value = toLocalInput(now.toISOString());
+      $('#rc_venue').value = ''; $('#rc_opp').value = '';
+      $('#rc_our').value = ''; $('#rc_opp2').value = '';
+      $('#rc_goals').innerHTML = evRowsHtml('goals');
+      $('#rc_assists').innerHTML = evRowsHtml('assists');
+      if ($('#rc_pick')) $('#rc_pick').value = '';
+      if ($('#rc_cancel')) $('#rc_cancel').style.display = 'none';
+      bind(); updSum(); setMode('新录入');
+    };
+
+    const pick = $('#rc_pick');
+    if (pick) pick.onchange = () => {
+      const id = pick.value;
+      if (!id) return resetForm();
+      const m = ST.matches.find(x => x.id === id);
+      if (!m) return resetForm();
+      RC.mid = id;
+      $('#rc_date').value = toLocalInput(m.match_date);
+      $('#rc_venue').value = m.venue_id || '';
+      $('#rc_opp').value = m.opponent || '';
+      $('#rc_our').value = (m.our_score == null ? '' : m.our_score);
+      $('#rc_opp2').value = (m.opp_score == null ? '' : m.opp_score);
+      /* 已有事件带进来，可继续补录 */
+      const ev = ST.events.filter(e => e.match_id === id);
+      const g = ev.filter(e => e.type === 'goal').map(e => ({ p: e.player_id, n: Number(e.count) || 1 }));
+      const a = ev.filter(e => e.type === 'assist').map(e => ({ p: e.player_id, n: Number(e.count) || 1 }));
+      RC.goals = g.length ? g : [{ p: '', n: 1 }];
+      RC.assists = a.length ? a : [{ p: '', n: 1 }];
+      $('#rc_goals').innerHTML = evRowsHtml('goals');
+      $('#rc_assists').innerHTML = evRowsHtml('assists');
+      if ($('#rc_cancel')) $('#rc_cancel').style.display = '';
+      bind(); updSum();
+      setMode('继续录入 · ' + (m.opponent || ''));
+    };
+    if ($('#rc_cancel')) $('#rc_cancel').onclick = resetForm;
+
     $('#rc_addg').onclick = () => addRow('goals');
     $('#rc_adda').onclick = () => addRow('assists');
     $('#rc_save').onclick = saveRecord;
@@ -1476,8 +1544,8 @@
     if (!opp) return toast('请填写对手队名');
     const date = $('#rc_date').value ? toISO($('#rc_date').value) : null;
     if (!date) return toast('请选择比赛日期');
-    const our = Number($('#rc_our').value) || 0;
-    const oppS = Number($('#rc_opp2').value) || 0;
+    const our = $('#rc_our').value === '' ? 0 : (Number($('#rc_our').value) || 0);
+    const oppS = $('#rc_opp2').value === '' ? 0 : (Number($('#rc_opp2').value) || 0);
     const goals = RC.goals.filter(r => r.p);
     const assists = RC.assists.filter(r => r.p);
     if (!goals.length && our > 0) {
@@ -1485,26 +1553,37 @@
     }
     const btn = $('#rc_save'); const old = btn.textContent;
     btn.textContent = '保存中…'; btn.disabled = true;
+    const mid = RC.mid;   /* 有值 = 继续录入（更新），空 = 新录一场 */
     try {
       const d = new Date(date);
       const def = APP_CONFIG.recordDefaults || {};
-      const m = await Store.insert('matches', {
+      const payload = {
         opponent: opp, match_date: date, season: String(d.getFullYear()),
         round: '', competition: def.competition || '联赛', is_home: def.is_home !== false,
         venue_id: $('#rc_venue').value || null,
-        our_score: our, opp_score: oppS, status: 'finished', remark: '',
-        created_by: ST.user || ''
-      });
+        our_score: our, opp_score: oppS, status: 'finished', remark: ''
+      };
+      let m;
+      if (mid) {
+        /* 更新已有比赛：先清掉旧事件再写入，避免重复累加 */
+        await Store.update('matches', mid, payload);
+        await Store.removeWhere('events', 'match_id', mid);
+        m = { id: mid };
+      } else {
+        payload.created_by = ST.user || '';
+        m = await Store.insert('matches', payload);
+      }
       for (const r of goals) {
         await Store.insert('events', { match_id: m.id, player_id: r.p, type: 'goal', count: Number(r.n) || 1, minute: null, is_penalty: false });
       }
       for (const r of assists) {
         await Store.insert('events', { match_id: m.id, player_id: r.p, type: 'assist', count: Number(r.n) || 1, minute: null, is_penalty: false });
       }
+      RC.mid = '';
       RC.goals = [{ p: '', n: 1 }]; RC.assists = [{ p: '', n: 1 }];
       await refresh();
       renderRecord();
-      toast('已保存：' + opp + ' ' + our + ':' + oppS);
+      toast((mid ? '已更新：' : '已保存：') + opp + ' ' + our + ':' + oppS);
     } catch (e) {
       toast('保存失败：' + (e.message || e)); btn.textContent = old; btn.disabled = false;
     }
