@@ -24,7 +24,7 @@
   });
 
   /* ★ 版本号：改代码时记得 +1，用于确认用户浏览器拿到的是不是最新版 */
-  const APP_VER = 'v27';
+  const APP_VER = 'v28';
   /* 实际生效的 Service Worker 缓存版本（从 sw.js 里读出来） */
   let SW_VER = '';
   async function readSwVer() {
@@ -511,12 +511,14 @@
        赛事徽标 + 统一编号放最前 */
     const cfgS = APP_CONFIG.home || {};
     const sq = (cfgS.showSeq === false) ? 0 : (SEQ_ALL[m.id] || 0);
+    /* 是否显示「友谊赛」这类赛事标签（默认不显示，页面更干净） */
+    const showTag = (APP_CONFIG.home || {}).showCompTag !== false;
     return '<div class="fix" data-mid="' + esc(m.id) + '">' +
       '<div class="fix-date"><b>' + db.d + '</b><span>' + db.m + '</span></div>' +
       '<div class="fix-mid">' +
         '<div class="fix-top">' +
           (sq ? '<span class="hf-seq">第' + sq + '场</span>' : '') +
-          (cp ? '<span class="ctag c-' + esc(cp) + '">' + esc(cp) + '</span>' : '') +
+          (showTag && cp ? '<span class="ctag c-' + esc(cp) + '">' + esc(cp) + '</span>' : '') +
           '<span class="fix-opp">' + esc(m.opponent || '待定对手') + '</span>' +
           oppTagHtml(m) +
         '</div>' +
@@ -591,6 +593,10 @@
 
     const us = ourShort();
     const opp = m.opponent || '待定对手';
+    /* 首页默认不显示「友谊赛」等赛事标签（config.home.showCompTag 控制） */
+    const showTag = (APP_CONFIG.home || {}).showCompTag !== false;
+    const compTag = (showTag && m.competition)
+      ? '<span class="ctag c-' + esc(m.competition) + '">' + esc(m.competition) + '</span>' : '';
     const or = oppRecord(opp);
     const v = venueById(m.venue_id);
     const vr = venueRecord(m.venue_id);
@@ -603,7 +609,7 @@
       '<div class="fix-mid">' +
         /* 第一行：序号 + 对阵双方 */
         '<div class="hf-top">' +
-          (seq ? '<span class="hf-seq">第' + seq + '场</span>' : '') +
+          (seq ? '<span class="hf-seq">第' + seq + '场</span>' : '') + compTag +
           '<span class="hf-vs"><b>' + esc(us) + '</b><i>VS</i><b>' + esc(opp) + '</b></span>' +
         '</div>' +
         /* 第二行：与该对手的交锋战绩 */
@@ -680,9 +686,19 @@
   /* 赛事筛选标签 */
   function renderCompFilter() {
     const used = Array.from(new Set(ST.matches.map(m => m.competition).filter(Boolean)));
+    /* 只有一种赛事时没什么可筛的（比如全是友谊赛），整个筛选栏隐藏，
+       页面上就不再出现「友谊赛」这三个字 */
+    const el0 = $('#compFilter');
+    if (used.length <= 1) {
+      el0.innerHTML = '';
+      el0.style.display = 'none';
+      if (ST.comp) { ST.comp = ''; }
+      return;
+    }
+    el0.style.display = '';
     const all = ['全部'].concat(COMPS.filter(c => used.indexOf(c) >= 0))
       .concat(used.filter(c => COMPS.indexOf(c) < 0 && c !== '全部'));
-    const el = $('#compFilter');
+    const el = el0;
     el.innerHTML = all.map(c => {
       const v = c === '全部' ? '' : c;
       const n = c === '全部' ? ST.matches.length : ST.matches.filter(m => (m.competition || '') === v).length;
