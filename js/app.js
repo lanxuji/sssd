@@ -24,7 +24,7 @@
   });
 
   /* ★ 版本号：改代码时记得 +1，用于确认用户浏览器拿到的是不是最新版 */
-  const APP_VER = 'v26';
+  const APP_VER = 'v27';
   /* 实际生效的 Service Worker 缓存版本（从 sw.js 里读出来） */
   let SW_VER = '';
   async function readSwVer() {
@@ -624,10 +624,16 @@
        优先放最近的 2 场未开赛（未来赛程要看得见），
        剩余名额用最近已结束的比赛补足。 */
     const HOME_N = 5, UP_N = 2;
-    const up = ST.matches.filter(m => m.status === 'upcoming' && isHomeVisible(m))
+    /* 兜底：如果按 hideComps 过滤后一场不剩（比如全是友谊赛），
+       就自动显示全部 —— 绝不让首页出现「暂无赛程」 */
+    const visAll = ST.matches.filter(isHomeVisible);
+    const useAll = visAll.length === 0 && ST.matches.length > 0;
+    const ok = useAll ? (() => true) : isHomeVisible;
+
+    const up = ST.matches.filter(m => m.status === 'upcoming' && ok(m))
       .sort((a, b) => new Date(a.match_date || 9e15) - new Date(b.match_date || 9e15))
       .slice(0, UP_N);
-    const fin = finishedMatches().filter(isHomeVisible)
+    const fin = finishedMatches().filter(ok)
       .slice(0, Math.max(0, HOME_N - up.length));
     const list = up.concat(fin);
     const cfgH = APP_CONFIG.home || {};
@@ -635,8 +641,8 @@
     $('#homeFixtures').innerHTML = list.length
       ? list.map(m => homeFixtureRow(m, seqs[m.id])).join('')
       : '<div class="empty"><i>📅</i>暂无赛程，点击右上角 ⚙️ 登录后可添加</div>';
-    /* 场次小计：也按「首页可见」的口径统计 */
-    const visN = ST.matches.filter(isHomeVisible).length;
+    /* 场次小计：按实际显示的口径统计 */
+    const visN = useAll ? ST.matches.length : visAll.length;
     $('#fixtureSub').textContent = '共 ' + visN + ' 场';
   }
 
