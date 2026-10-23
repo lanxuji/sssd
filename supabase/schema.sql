@@ -70,7 +70,7 @@ create table if not exists public.events (
   id          uuid primary key default gen_random_uuid(),
   match_id    uuid,
   player_id   uuid,
-  type        text,                       -- goal / assist / shoot / yellow / red
+  type        text,                       -- goal / assist / shoot / clear / save / yellow / red / appear
   count       int default 1,
   minute      int,
   is_penalty  boolean default false,      -- 是否点球（仅 goal 有效）

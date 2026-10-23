@@ -158,6 +158,14 @@ img{max-width:100%}
 .fix-opprec{flex:none;font-size:10px;font-weight:800;color:var(--navy);
   background:rgba(11,95,66,.10);border:1px solid var(--hair);
   border-radius:20px;padding:1px 7px;white-space:nowrap;line-height:1.6}
+/* 胜率分级配色：≤60% 红 / 60~80% 黄 / >80% 绿
+   底色用低透明度，文字用深色，保证浅底玻璃上清晰可读 */
+.rt-low{background:rgba(224,36,36,.14);border-color:rgba(224,36,36,.34);color:#A01111}
+.rt-low i,.rt-low{color:#A01111}
+.rt-mid{background:rgba(217,164,4,.18);border-color:rgba(217,164,4,.40);color:#7A5A00}
+.rt-mid i{color:#7A5A00}
+.rt-high{background:rgba(14,159,110,.16);border-color:rgba(14,159,110,.38);color:#0A6B4A}
+.rt-high i{color:#0A6B4A}
 /* 场地行：整行作为一个容器，内部徽标可换行 */
 .fix-extra{font-size:11.5px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:6px;min-width:0}
 .fix-extra .fix-venue{max-width:100%}
@@ -249,6 +257,13 @@ textarea.ipt{height:auto;padding:9px 11px;line-height:1.6}
 .seg button:last-child{border-right:0}
 .seg button.on{background:var(--navy);color:#fff}
 .seg.five button{font-size:12.5px;padding:0 2px}
+/* 事件类型较多（7 项）时自动换行，避免挤成一条 */
+.seg.wrap{flex-wrap:wrap}
+.seg.wrap button{flex:0 0 33.3333%;border-bottom:1px solid var(--hair);height:34px;font-size:13px}
+.seg.wrap button:nth-last-child(-n+1){border-bottom:0}
+/* 列表里新增的两类徽标配色 */
+.ev-b.c{background:rgba(29,78,216,.14);color:#1D4ED8}
+.ev-b.v{background:rgba(124,58,237,.14);color:#7C3AED}
 .tabs.six{overflow-x:auto}
 .tabs.six .tab{flex:none;min-width:52px;font-size:12.5px}
 
@@ -472,6 +487,14 @@ body.has-wxtip{padding-top:calc(var(--bar-h) + 38px)}
 .rc-pick{margin-bottom:12px}
 /* 本机模式警告：录入的数据只有自己看得到，必须醒目 */
 .rc-warn{background:#FFF2F0;border:1px solid rgba(224,36,36,.32);color:#9B1C1C;margin-bottom:12px;line-height:1.7}
+/* 已导入的出场名单提示 */
+.rc-lineup{background:rgba(14,159,110,.10);border:1px solid rgba(14,159,110,.28);
+  color:#0A6B4A;margin-bottom:12px;line-height:1.7}
+.rc-lineup b{color:#0A6B4A}
+/* 接龙关联：左侧昵称，右侧选球员 */
+.jl-nick{flex:none;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:13px;font-weight:700;color:var(--ink)}
+.evrow .jl-sel{flex:1}
 .rc-pick select{font-weight:600}
 /* 输入框去掉预填提示后的留白仍要够大，方便点按 */
 .block.rc .ipt{height:44px}

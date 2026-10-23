@@ -24,7 +24,7 @@
   });
 
   /* ★ 版本号：改代码时记得 +1，用于确认用户浏览器拿到的是不是最新版 */
-  const APP_VER = 'v23';
+  const APP_VER = 'v24';
   /* 实际生效的 Service Worker 缓存版本（从 sw.js 里读出来） */
   let SW_VER = '';
   async function readSwVer() {
@@ -48,9 +48,16 @@
     assist: { name: '助攻', unit: '助', lb: '助攻榜' },
     app: { name: '出场', unit: '场', lb: '出场榜' },
     shoot: { name: '射门', unit: '次', lb: '射门榜' },
+    clear: { name: '解围', unit: '次', lb: '解围榜' },
+    save: { name: '扑救', unit: '次', lb: '扑救榜' },
     yellow: { name: '黄牌', unit: '张', lb: '黄牌榜' },
-    red: { name: '红牌', unit: '张', lb: '红牌榜' }
+    red: { name: '红牌', unit: '张', lb: '红牌榜' },
+    /* appear 是真实写入的事件类型（接龙导入的出场名单）；
+       app 只是榜单用的虚拟口径，不写库 */
+    appear: { name: '出场', unit: '场', lb: '出场榜' }
   };
+  /* 可在比赛详情里单独录入的类型（不含 appear，出场走接龙导入） */
+  const EV_INPUT = ['goal', 'assist', 'shoot', 'clear', 'save', 'yellow', 'red'];
 
   const ST = { profile: null, players: [], venues: [], matches: [], events: [], role: 'guest', admin: false, recorder: false, user: '', lb: 'goal', comp: '' };
 
@@ -137,16 +144,179 @@
     }
   }
 
+  /* ============================================================
+   *  微信接龙导入
+   *  从「#接龙 周四晚上8点，华涌2号场，实达（白色）对旺旺（红色）1. 秋风 …」
+   *  里自动提取：日期时间 / 场地 / 对手 / 出场名单
+   * ============================================================ */
+
+  /* 昵称映射：config 预填的 + 本机现场选过的（本机优先合并） */
+  function nickMapAll() {
+    let local = {};
+    try { local = JSON.parse(localStorage.getItem('sclh_nickmap') || '{}') || {}; } catch (e) { }
+    return Object.assign({}, (APP_CONFIG.nicknameMap || {}), local);
+  }
+  function nickSave(nick, playerName) {
+    let local = {};
+    try { local = JSON.parse(localStorage.getItem('sclh_nickmap') || '{}') || {}; } catch (e) { }
+    local[nick] = playerName;
+    try { localStorage.setItem('sclh_nickmap', JSON.stringify(local)); } catch (e) { }
+  }
+  /* 按名字找球员（去掉空格后比较，容忍「孙文峰 / 孙 文峰」） */
+  function playerByName(name) {
+    const k = normOpp(name);
+    if (!k) return null;
+    return ST.players.find(p => normOpp(p.name) === k) || null;
+  }
+
+  const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}]/gu;
+
+  /* 清掉 emoji、括号内容、空格，得到可比较的昵称 */
+  function cleanNick(raw) {
+    let s = String(raw || '');
+    s = s.replace(/[（(][^）)]*[）)]/g, '');   // 去掉括号及内容
+    s = s.replace(EMOJI_RE, '');
+    s = s.replace(/[\s\u3000]/g, '');
+    s = s.replace(/^[、.,，。:：]+|[、.,，。:：]+$/g, '');
+    return s.trim();
+  }
+  /* 括号里写着「待定 / 可能 / 不一定」的，整行跳过 */
+  function isMaybe(raw) {
+    const m = String(raw || '').match(/[（(]([^）)]*)[）)]/g) || [];
+    return m.some(x => /待定|可能|不一定|未必|看看|争取|待确认/.test(x));
+  }
+
+  /* 从文本里提取日期时间：周X + 上午/下午/晚上 + N点 */
+  function jielongDate(text) {
+    const t = String(text || '');
+    const wMap = { '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '日': 0, '天': 0, '末': 6 };
+    let wd = null;
+    const wm = t.match(/(?:周|星期|礼拜)\s*([一二三四五六日天末])/);
+    if (wm) wd = wMap[wm[1]];
+    let hh = null, mm = 0;
+    const tm = t.match(/(上午|早上|早晨|中午|下午|傍晚|晚上|夜里)?\s*(\d{1,2})\s*[点:：時时]\s*(半|\d{1,2})?/);
+    if (tm) {
+      hh = Number(tm[2]);
+      /* 支持「7点半」这种写法 */
+      mm = tm[3] === '半' ? 30 : (tm[3] ? Number(tm[3]) : 0);
+      const per = tm[1] || '';
+      if (/下午|傍晚|晚上|夜里/.test(per)) { if (hh >= 1 && hh <= 11) hh += 12; else if (hh === 12 && /晚上|夜里/.test(per)) hh = 0; }
+      else if (/中午/.test(per)) { if (hh >= 1 && hh <= 11) hh = 12; }
+    }
+    if (wd == null && hh == null) return '';
+    const now = new Date();
+    const base = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (wd != null) {
+      /* 找「下一个」该星期几；如果就是今天且时间还没到，也用今天 */
+      let diff = (wd - base.getDay() + 7) % 7;
+      base.setDate(base.getDate() + diff);
+    }
+    if (hh != null) base.setHours(hh, mm, 0, 0);
+    else base.setHours(19, 30, 0, 0);
+    const p = n => String(n).padStart(2, '0');
+    return base.getFullYear() + '-' + p(base.getMonth() + 1) + '-' + p(base.getDate()) +
+      'T' + p(base.getHours()) + ':' + p(base.getMinutes());
+  }
+
+  /* 从文本里认场地：取匹配到的最长场地名 */
+  function jielongVenue(text) {
+    const t = String(text || '');
+    let best = null, bestLen = 0;
+    ST.venues.forEach(v => {
+      const n = (v.name || '').trim();
+      if (!n) return;
+      if (t.indexOf(n) >= 0 && n.length > bestLen) { best = v; bestLen = n.length; }
+    });
+    return best ? best.id : '';
+  }
+
+  /* 从「实达（白色）对旺旺（红色）」里认对手 */
+  function jielongOpponent(text) {
+    let t = String(text || '').replace(/[（(][^）)]*[）)]/g, ' ');
+    const aliases = APP_CONFIG.ourAliases || ['实达', '狮山实达'];
+    const m = t.match(/([\u4e00-\u9fa5A-Za-z0-9]{1,12})\s*(?:对|VS|vs|Vs|打|－|-|—)\s*([\u4e00-\u9fa5A-Za-z0-9]{1,12})/);
+    if (!m) return '';
+    const a = m[1], b = m[2];
+    const isOurs = s => aliases.some(x => String(s).indexOf(x) >= 0);
+    if (isOurs(a) && !isOurs(b)) return b;
+    if (isOurs(b) && !isOurs(a)) return a;
+    return b;   // 认不出我方时用后者
+  }
+
+  /* 提取名单行：以「1. 」「2、」「3)」等开头 */
+  function jielongNames(text) {
+    const out = [];
+    String(text || '').split(/\r?\n/).forEach(line => {
+      const s = line.trim();
+      if (!s) return;
+      if (/^#/.test(s)) return;                      // 跳过 #接龙 那行
+      const m = s.match(/^\s*(\d{1,3})\s*[.、)．，,、:：\-]\s*(.+)$/);
+      if (!m) return;
+      const raw = m[2].trim();
+      out.push({ raw: raw, clean: cleanNick(raw), skip: isMaybe(raw) });
+    });
+    return out.filter(x => x.clean);
+  }
+
+  /* 昵称 → 球员：精确 → 映射表 → 包含关系 */
+  function matchPlayer(clean) {
+    if (!clean) return null;
+    let p = playerByName(clean);
+    if (p) return p;
+    const nm = nickMapAll();
+    if (nm[clean]) { p = playerByName(nm[clean]); if (p) return p; }
+    const k = normOpp(clean);
+    p = ST.players.find(x => {
+      const n = normOpp(x.name);
+      if (!n) return false;
+      return n === k || n.indexOf(k) >= 0 || k.indexOf(n) >= 0;
+    }) || null;
+    return p;
+  }
+
+  /* 解析整段接龙 */
+  function jielongParse(text) {
+    const names = jielongNames(text);
+    const items = names.map(x => {
+      const p = x.skip ? null : matchPlayer(x.clean);
+      return { raw: x.raw, clean: x.clean, skip: x.skip, player: p };
+    });
+    return {
+      date: jielongDate(text),
+      venueId: jielongVenue(text),
+      opponent: jielongOpponent(text),
+      items: items,
+      matched: items.filter(x => x.player).length,
+      skipped: items.filter(x => x.skip).length,
+      unknown: items.filter(x => !x.skip && !x.player)
+    };
+  }
+
   /* ---------------- 统计计算 ---------------- */
   /* 榜单统计：支持 goal/assist/app/shoot/yellow/red，进球额外统计点球数 */
   function board(type) {
     const map = {};
     if (type === 'app') {
-      /* 出场：该球员「出现在任意事件里」的不同比赛数（进球/助攻/射门/黄牌都算出场） */
+      /* 出场口径（两套并存，按比赛区分）：
+         · 有接龙出场名单的比赛 → 只认名单里有的人（appear 事件）
+         · 没有出场名单的比赛   → 有任意事件（进球/助攻/射门/牌）即算出场
+         这样导入接龙后出场数准确，没导入的比赛也不会漏。 */
+      const hasList = new Set();
+      ST.events.forEach(e => { if (e.type === 'appear' && e.match_id) hasList.add(e.match_id); });
+      const byList = {}, byEvent = {};
       ST.events.forEach(e => {
         if (!e.match_id || !e.player_id) return;
-        const m = map[e.player_id] = map[e.player_id] || { v: new Set(), pen: 0 };
-        m.v.add(e.match_id);
+        if (e.type === 'appear') {
+          (byList[e.player_id] = byList[e.player_id] || new Set()).add(e.match_id);
+        } else if (!hasList.has(e.match_id)) {
+          (byEvent[e.player_id] = byEvent[e.player_id] || new Set()).add(e.match_id);
+        }
+      });
+      [byList, byEvent].forEach(src => {
+        Object.keys(src).forEach(pid => {
+          const m = map[pid] = map[pid] || { v: new Set(), pen: 0 };
+          src[pid].forEach(mid => m.v.add(mid));
+        });
       });
     } else {
       ST.events.forEach(e => {
@@ -195,13 +365,19 @@
     const n = fin.length;
     return { n: n, w: w, d: d, l: l, rate: Math.round(w / n * 100) };
   }
-  /* 把场地战绩渲染成小徽标，如「弘艺 3胜1平 75%」 */
+  /* 胜率分级配色：≤60% 红，60~80% 黄，>80% 绿 */
+  function rateClass(rate) {
+    const r = Number(rate) || 0;
+    return r <= 60 ? 'rt-low' : (r <= 80 ? 'rt-mid' : 'rt-high');
+  }
+
+  /* 把场地战绩渲染成小徽标，如「弘艺 3胜1平1负 · 60%」 */
   function venueTagHtml(m) {
     const v = venueById(m.venue_id);
     if (!v) return '';
     const r = venueRecord(m.venue_id);
     if (!r) return '<span class="fix-venue">' + esc(v.name) + '</span>';
-    return '<span class="fix-venue has-rec">' + esc(v.name) +
+    return '<span class="fix-venue has-rec ' + rateClass(r.rate) + '">' + esc(v.name) +
       '<i>' + r.w + '胜' + r.d + '平' + r.l + '负 · ' + r.rate + '%</i></span>';
   }
 
@@ -224,11 +400,12 @@
     const n = fin.length;
     return { n: n, w: w, d: d, l: l, rate: Math.round(w / n * 100) };
   }
-  /* 交锋战绩徽标：紧跟对手名，如「南海雄鹰 2胜1负 67%」 */
+  /* 交锋战绩徽标：紧跟对手名，如「南海雄鹰 2胜1平1负 · 67%」 */
   function oppTagHtml(m) {
     const r = oppRecord(m.opponent);
     if (!r) return '';
-    return '<span class="fix-opprec">' + r.w + '胜' + r.d + '平' + r.l + '负 · ' + r.rate + '%</span>';
+    return '<span class="fix-opprec ' + rateClass(r.rate) + '">' +
+      r.w + '胜' + r.d + '平' + r.l + '负 · ' + r.rate + '%</span>';
   }
   function wins() { return finishedMatches().filter(m => (Number(m.our_score) || 0) > (Number(m.opp_score) || 0)).length; }
 
@@ -615,7 +792,7 @@
   function eventsHtml(mid, admin) {
     const evs = ST.events.filter(e => e.match_id === mid);
     if (!evs.length) return '<div class="empty" style="padding:14px 0">暂无比赛数据</div>';
-    const order = ['goal', 'assist', 'shoot', 'yellow', 'red'];
+    const order = ['goal', 'assist', 'shoot', 'clear', 'save', 'yellow', 'red'];
     evs.sort((a, b) => {
       const ia = order.indexOf(a.type), ib = order.indexOf(b.type);
       return (ia < 0 ? 9 : ia) - (ib < 0 ? 9 : ib) || (Number(a.minute) || 0) - (Number(b.minute) || 0);
@@ -623,7 +800,7 @@
     return evs.map(e => {
       const p = playerById(e.player_id);
       const meta = EV_TYPES[e.type] || { name: e.type };
-      const cls = { goal: '', assist: 'a', shoot: 's', yellow: 'y', red: 'r' }[e.type] || '';
+      const cls = { goal: '', assist: 'a', shoot: 's', clear: 'c', save: 'v', yellow: 'y', red: 'r' }[e.type] || '';
       const tag = (e.type === 'goal' && e.is_penalty) ? '<i class="ptag">点</i>' : '';
       return '<div class="ev"><div class="ev-b ' + cls + '">' + meta.name + '</div>' +
         '<div class="ev-m">' + esc(p ? p.name : '未知球员') + tag +
@@ -681,11 +858,11 @@
   function openEvent(mid) {
     if (!ST.players.length) return toast('请先在「球员」中添加球员');
     const pOpts = ST.players.map(p => '<option value="' + esc(p.id) + '">#' + esc(p.number || '-') + ' ' + esc(p.name) + '</option>').join('');
-    const tBtns = ['goal', 'assist', 'shoot', 'yellow', 'red'].map((k, i) =>
+    const tBtns = EV_INPUT.map((k, i) =>
       '<button data-v="' + k + '"' + (i === 0 ? ' class="on"' : '') + '>' + EV_TYPES[k].name + '</button>').join('');
     openSheet('录入本场数据',
       '<div class="fld"><label>球员</label><select class="ipt" id="e_p">' + pOpts + '</select></div>' +
-      '<div class="fld"><label>类型</label><div class="seg five" id="e_t">' + tBtns + '</div></div>' +
+      '<div class="fld"><label>类型（解围 / 扑救等在此单独录入）</label><div class="seg wrap" id="e_t">' + tBtns + '</div></div>' +
       '<div class="fld" id="e_penwrap"><label>是否点球</label><div class="seg" id="e_pen"><button data-v="0" class="on">否</button><button data-v="1">是（点球）</button></div></div>' +
       '<div class="row2"><div class="fld"><label>次数</label><input class="ipt" type="number" id="e_c" value="1" min="1"></div>' +
       '<div class="fld"><label>分钟（可留空）</label><input class="ipt" type="number" id="e_m" placeholder="如 68"></div></div>' +
@@ -1460,7 +1637,8 @@
   const RC = {
     mid: '',                          // 继续录入的比赛 id
     rows: [{ p: '', g: '', a: '' }],  // 每行一个球员，进球 / 助攻并排
-    date: '', venue: '', opp: '', our: '', oppS: ''   // 记住已填内容，重渲染不丢
+    date: '', venue: '', opp: '', our: '', oppS: '',   // 记住已填内容，重渲染不丢
+    lineup: []                              // 接龙导入的出场名单（球员 id）
   };
 
   function playerOpts(sel) {
@@ -1522,10 +1700,19 @@
     /* 场地占位项也留空，保持界面干净 */
     const vHead = RC.venue ? '' : '<option value="" selected></option>';
 
+    /* 已导入的出场名单提示 */
+    const LINEUP_TIP = (RC.lineup && RC.lineup.length)
+      ? '<div class="note rc-lineup">✓ 已导入出场名单 <b>' + RC.lineup.length + ' 人</b>：' +
+        RC.lineup.map(id => { const p = playerById(id); return p ? esc(p.name) : ''; }).filter(Boolean).join('、') +
+        '<br><button class="btn ghost" id="rc_clearlu" style="margin-top:8px">清除名单</button></div>'
+      : '';
+
     el.innerHTML =
       OFFLINE_WARN +
       '<div class="block rc">' +
         '<div class="block-hd"><h3>本场比赛</h3><span class="block-sub" id="rc_mode">新录入</span></div>' +
+        '<button class="btn wide ghost" id="rc_jielong" style="margin-bottom:10px">📋 从微信接龙导入</button>' +
+        LINEUP_TIP +
         (pend.length ? '<div class="fld rc-pick">' +
           '<label>继续未完成的比赛（' + pend.length + ' 场）</label>' +
           '<select class="ipt" id="rc_pick"><option value="">＋ 新录一场</option>' +
@@ -1602,7 +1789,7 @@
     };
     const resetForm = () => {
       RC.mid = ''; RC.rows = [{ p: '', g: '', a: '' }];
-      RC.date = ''; RC.venue = ''; RC.opp = ''; RC.our = ''; RC.oppS = '';
+      RC.date = ''; RC.venue = ''; RC.opp = ''; RC.our = ''; RC.oppS = ''; RC.lineup = [];
       renderRecord();
       setMode('新录入');
     };
@@ -1631,6 +1818,8 @@
         else map[e.player_id].a = String((Number(map[e.player_id].a) || 0) + c);
       });
       RC.rows = order.length ? order.map(k => map[k]) : [{ p: '', g: '', a: '' }];
+      /* 出场名单带回来（appear 事件） */
+      RC.lineup = ev.filter(e => e.type === 'appear').map(e => e.player_id).filter(Boolean);
       renderRecord();
       setMode('继续录入 · ' + (m.opponent || ''));
       toast('已载入：' + (m.opponent || '') );
@@ -1639,6 +1828,8 @@
 
     $('#rc_add').onclick = addRow;
     $('#rc_save').onclick = saveRecord;
+    if ($('#rc_jielong')) $('#rc_jielong').onclick = openJielongImport;
+    if ($('#rc_clearlu')) $('#rc_clearlu').onclick = () => { keep(); RC.lineup = []; renderRecord(); };
     /* 输入时记住，切页面回来不丢 */
     ['#rc_date', '#rc_venue', '#rc_opp', '#rc_our', '#rc_opp2'].forEach(sel => {
       const n = $(sel); if (n) n.onchange = keep;
@@ -1652,6 +1843,83 @@
   function dateInputVal(d) {
     const p = n => String(n).padStart(2, '0');
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  }
+
+  /* ---------------- 接龙导入界面 ---------------- */
+  function openJielongImport() {
+    openSheet('从微信接龙导入',
+      '<div class="note">把群里的接龙整段粘进来，自动识别<b>日期 / 场地 / 对手 / 出场名单</b>。<br>' +
+        '带「（待定）」的会自动跳过。</div>' +
+      '<div class="fld"><label>接龙内容</label>' +
+      '<textarea class="ipt" id="jl_txt" rows="8" placeholder="#接龙\n周四晚上8点，华涌2号场，实达（白色）对旺旺（红色）\n\n1. 秋风\n2. 蓝\n3. 张远城"></textarea></div>' +
+      '<div class="acts"><button class="btn" id="jl_go">解析</button></div>' +
+      '<div id="jl_result"></div>', () => {
+        $('#jl_go').onclick = () => {
+          const txt = ($('#jl_txt').value || '').trim();
+          if (!txt) return toast('请先粘贴接龙内容');
+          const r = jielongParse(txt);
+          const box = $('#jl_result');
+          if (!r.items.length) {
+            box.innerHTML = '<div class="note" style="margin-top:12px">没识别出名单。请确认每行是「1. 名字」这种格式。</div>';
+            return;
+          }
+          const v = r.venueId ? venueById(r.venueId) : null;
+          const un = r.unknown || [];
+          box.innerHTML =
+            '<div class="block rc" style="margin-top:12px">' +
+            '<div class="block-hd"><h3>识别结果</h3><span class="block-sub">' +
+            '匹配 ' + r.matched + ' 人' + (r.skipped ? ' · 跳过 ' + r.skipped + ' 人' : '') + '</span></div>' +
+            '<div class="fld-row">' +
+            '<div class="fld"><label>日期</label><input class="ipt" type="datetime-local" id="jl_date" value="' + esc(r.date) + '"></div>' +
+            '<div class="fld"><label>对手</label><input class="ipt" id="jl_opp" value="' + esc(r.opponent) + '"></div>' +
+            '</div>' +
+            '<div class="fld"><label>场地</label><select class="ipt" id="jl_venue">' +
+            '<option value=""></option>' +
+            ST.venues.map(x => '<option value="' + esc(x.id) + '"' + (x.id === r.venueId ? ' selected' : '') + '>' + esc(x.name) + '</option>').join('') +
+            '</select></div>' +
+            '<div class="note" style="margin-top:4px">识别到的名单：<br>' +
+            r.items.map(x => {
+              if (x.skip) return '<span style="opacity:.5;text-decoration:line-through">' + esc(x.clean) + '（待定，跳过）</span>';
+              return x.player ? esc(x.player.name) : '<b style="color:#A01111">' + esc(x.clean) + '（未识别）</b>';
+            }).join('、') + '</div>' +
+            (un.length ? '<div style="margin-top:10px"><label>把这些昵称关联到球员（选一次就记住）</label>' +
+              un.map((x, i) => '<div class="evrow" data-i="' + i + '">' +
+                '<span class="jl-nick">' + esc(x.clean) + '</span>' +
+                '<select class="ipt ev-p jl-sel" data-nick="' + esc(x.clean) + '">' +
+                '<option value="">跳过此人</option>' +
+                ST.players.map(p => '<option value="' + esc(p.name) + '">#' + esc(p.number || '-') + ' ' + esc(p.name) + '</option>').join('') +
+                '</select></div>').join('') + '</div>' : '') +
+            '<div style="margin-top:12px"><button class="btn wide big" id="jl_apply">✓ 导入到录入表单</button></div>' +
+            '</div>';
+
+          $('#jl_apply').onclick = () => {
+            /* 保存现场关联 */
+            $$('#jl_result .jl-sel').forEach(sel => {
+              const v2 = sel.value;
+              if (v2) nickSave(sel.dataset.nick, v2);
+            });
+            const names = [];
+            r.items.forEach(x => {
+              if (x.skip) return;
+              let p = x.player;
+              if (!p) {
+                const nm = nickMapAll()[x.clean];
+                if (nm) p = playerByName(nm);
+              }
+              if (p) names.push(p.id);
+            });
+            if (!names.length) return toast('没有识别到任何球员，请先在「球员」页添加');
+            /* 填入录入表单 */
+            RC.date = ($('#jl_date').value || '');
+            RC.venue = ($('#jl_venue').value || '');
+            RC.opp = ($('#jl_opp').value || '');
+            RC.lineup = names;
+            closeSheet();
+            renderRecord();
+            toast('已导入：' + RC.opp + ' · 出场 ' + names.length + ' 人');
+          };
+        };
+      });
   }
 
   function recentHtml() {
@@ -1711,12 +1979,17 @@
       for (const r of assists) {
         await Store.insert('events', { match_id: m.id, player_id: r.p, type: 'assist', count: r.n, minute: null, is_penalty: false });
       }
+      /* 出场名单（接龙导入）：写成 appear 事件，出场榜直接按它统计 */
+      (RC.lineup || []).forEach(pid => {
+        if (pid) Store.insert('events', { match_id: m.id, player_id: pid, type: 'appear', count: 1, minute: null, is_penalty: false });
+      });
+      const luN = (RC.lineup || []).length;
       /* 清空表单 */
       RC.mid = ''; RC.rows = [{ p: '', g: '', a: '' }];
-      RC.date = ''; RC.venue = ''; RC.opp = ''; RC.our = ''; RC.oppS = '';
+      RC.date = ''; RC.venue = ''; RC.opp = ''; RC.our = ''; RC.oppS = ''; RC.lineup = []; RC.lineup = [];
       await refresh();
       renderRecord();
-      toast((mid ? '已更新：' : '已保存：') + opp + ' ' + our + ':' + oppS);
+      toast((mid ? '已更新：' : '已保存：') + opp + ' ' + our + ':' + oppS + (luN ? ' · 出场 ' + luN + ' 人' : ''));
     } catch (e) {
       toast('保存失败：' + (e.message || e)); btn.textContent = old; btn.disabled = false;
     }
