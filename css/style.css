@@ -110,7 +110,7 @@ img{max-width:100%}
 .grp-hd:not(:first-child){margin-top:6px;padding-top:12px;border-top:1px solid var(--hair)}
 
 /* 赛事徽标 */
-.fix-top{display:flex;align-items:center;gap:6px;margin-bottom:2px}
+.fix-top{display:flex;align-items:center;gap:6px;margin-bottom:2px;flex-wrap:wrap}
 .ctag{font-size:10px;padding:1px 6px;border-radius:4px;font-weight:700;color:#fff;line-height:1.5}
 .ctag.c-联赛{background:#1D4ED8}
 .ctag.c-杯赛{background:#7C3AED}
@@ -153,8 +153,8 @@ img{max-width:100%}
 .fix-date b{display:block;font-size:16px;line-height:1.1;color:var(--navy)}
 .fix-date span{font-size:10px;color:var(--muted)}
 .fix-mid{flex:1;min-width:0}
-/* 对手名：行内跟赛事徽标并排，过长才截断 */
-.fix-opp{font-size:14px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 对手名：完整显示，过长换行（不再显示成「四会…」） */
+.fix-opp{font-size:14px;font-weight:600;min-width:0;line-height:1.3;word-break:break-word;overflow-wrap:anywhere}
 /* 与对手的历史交锋战绩：跟在对手名后面 */
 .fix-opprec{flex:none;font-size:10px;font-weight:800;color:var(--navy);
   background:rgba(11,95,66,.10);border:1px solid var(--hair);
@@ -167,6 +167,28 @@ img{max-width:100%}
 .rt-mid i{color:#7A5A00}
 .rt-high{background:rgba(14,159,110,.16);border-color:rgba(14,159,110,.38);color:#0A6B4A}
 .rt-high i{color:#0A6B4A}
+/* ---- 首页赛程行：对阵双方 + 双方战绩 + 场地战绩 ---- */
+.hfix{align-items:flex-start;padding:11px 12px}
+.hfix .fix-date{margin-top:2px}
+.hfix .fix-mid{min-width:0}
+/* 第一行：序号 + 实达 VS 旺旺 */
+.hf-top{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px}
+.hf-seq{flex:none;font-size:10.5px;font-weight:800;color:#fff;background:var(--navy);
+  border-radius:5px;padding:2px 6px;line-height:1.4}
+.hf-vs{display:inline-flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap;
+  font-size:14.5px;font-weight:700;line-height:1.35}
+.hf-vs b{word-break:break-word;overflow-wrap:anywhere}
+.hf-vs i{font-style:normal;font-size:11.5px;font-weight:800;color:var(--ink-3);
+  background:rgba(11,95,66,.09);border-radius:4px;padding:1px 5px;flex:none}
+/* 战绩行 */
+.hf-line{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:3px;font-size:11px}
+.hf-lb{flex:none;color:var(--muted);font-weight:600}
+.hf-ven{font-size:12px;font-weight:700;color:var(--ink-2);margin-right:2px}
+.hf-tag{flex:none;font-size:10.5px;font-weight:800;padding:1px 7px;border-radius:20px;
+  border:1px solid var(--hair);background:rgba(11,95,66,.08);color:var(--navy);white-space:nowrap}
+/* 比分右侧 */
+.hfix .fix-right{margin-top:2px}
+
 /* 场地行：整行作为一个容器，内部徽标可换行 */
 .fix-extra{font-size:11.5px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:6px;min-width:0}
 .fix-extra .fix-venue{max-width:100%}
@@ -189,7 +211,8 @@ img{max-width:100%}
 .rk-no.t1{color:#D4A100} .rk-no.t2{color:#8E9AAE} .rk-no.t3{color:#C08040}
 .rk-av{width:28px;height:28px;border-radius:50%;background:#EEF2FA;color:var(--navy);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none;overflow:hidden}
 .rk-av img{width:100%;height:100%;object-fit:cover}
-.rk-nm{flex:1;min-width:0;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rk-nm{flex:1;min-width:0;font-size:13.5px;line-height:1.35;
+  word-break:break-word;overflow-wrap:anywhere}
 .rk-nm small{color:var(--muted);font-size:11px;margin-left:4px}
 .rk-v{font-size:14px;font-weight:800;color:var(--navy);flex:none}
 /* 可点进球员信息卡的榜单行 */

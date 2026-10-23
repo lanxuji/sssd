@@ -24,7 +24,7 @@
   });
 
   /* ★ 版本号：改代码时记得 +1，用于确认用户浏览器拿到的是不是最新版 */
-  const APP_VER = 'v25';
+  const APP_VER = 'v26';
   /* 实际生效的 Service Worker 缓存版本（从 sw.js 里读出来） */
   let SW_VER = '';
   async function readSwVer() {
@@ -350,7 +350,11 @@
   function totalGoals() {
     return ST.matches.filter(m => m.status === 'finished').reduce((s, m) => s + (Number(m.our_score) || 0), 0);
   }
-  function finishedMatches() { return ST.matches.filter(m => m.status === 'finished'); }
+  /* 已结束的比赛：按日期倒序（最新的在前），首页 / 统计都依赖这个顺序 */
+  function finishedMatches() {
+    return ST.matches.filter(m => m.status === 'finished')
+      .sort((a, b) => new Date(b.match_date || 0) - new Date(a.match_date || 0));
+  }
 
   /* 某场地的历史战绩：胜/平/负 + 胜率（只统计已结束的比赛） */
   function venueRecord(vid) {
@@ -411,6 +415,7 @@
 
   /* ---------------- 渲染 ---------------- */
   function renderAll() {
+    refreshSeq();
     renderClub(); renderHomeFixtures(); renderHomeBoards();
     renderCompFilter(); renderFixtures(); renderFullRank(); renderPlayers(); renderVenues();
     if (ST.view === 'record') renderRecord();
@@ -503,11 +508,14 @@
     const v = venueById(m.venue_id);
     const cp = m.competition || '';
     /* 排列顺序：日期 → 对手（+ 交锋战绩）→ 场地（+ 场地战绩）
-       赛事徽标作为行首小标签，紧跟对手名 */
+       赛事徽标 + 统一编号放最前 */
+    const cfgS = APP_CONFIG.home || {};
+    const sq = (cfgS.showSeq === false) ? 0 : (SEQ_ALL[m.id] || 0);
     return '<div class="fix" data-mid="' + esc(m.id) + '">' +
       '<div class="fix-date"><b>' + db.d + '</b><span>' + db.m + '</span></div>' +
       '<div class="fix-mid">' +
         '<div class="fix-top">' +
+          (sq ? '<span class="hf-seq">第' + sq + '场</span>' : '') +
           (cp ? '<span class="ctag c-' + esc(cp) + '">' + esc(cp) + '</span>' : '') +
           '<span class="fix-opp">' + esc(m.opponent || '待定对手') + '</span>' +
           oppTagHtml(m) +
@@ -521,19 +529,115 @@
       '</div></div></div>';
   }
 
+  /* 我方简称：config.home.ourName，留空则取队名前两字（去掉 足球/俱乐部/队） */
+  function ourShort() {
+    const c = APP_CONFIG.home || {};
+    if (c.ourName) return c.ourName;
+    const n = (ST.profile && ST.profile.name) || '';
+    return String(n).replace(/足球|俱乐部|队/g, '').slice(0, 3) || '实达';
+  }
+
+  /* 全场统一编号缓存（含友谊赛），renderAll 时刷新 */
+  let SEQ_ALL = {};
+  function refreshSeq() {
+    SEQ_ALL = seqMap((APP_CONFIG.home && APP_CONFIG.home.seqScope) || 'all');
+  }
+
+  /* 首页要排除的赛事 */
+  function homeHiddenComps() {
+    return (APP_CONFIG.home && APP_CONFIG.home.hideComps) || ['友谊赛'];
+  }
+  function isHomeVisible(m) {
+    const hide = homeHiddenComps();
+    if (!hide.length) return true;
+    return hide.indexOf(m.competition || '') < 0;
+  }
+
+  /* 本年度第几场：按年份归组，按日期排序后取序号
+     默认按「所有比赛」统一编号（含友谊赛），号码全年唯一 */
+  function seqMap(scope) {
+    const map = {};
+    let all = ST.matches.slice();
+    if (scope !== 'all') all = all.filter(isHomeVisible);
+    const byYear = {};
+    all.forEach(m => {
+      const y = seasonOf(m);
+      (byYear[y] = byYear[y] || []).push(m);
+    });
+    Object.keys(byYear).forEach(y => {
+      byYear[y].sort((a, b) => new Date(a.match_date || 9e15) - new Date(b.match_date || 9e15));
+      byYear[y].forEach((m, i) => { map[m.id] = i + 1; });
+    });
+    return map;
+  }
+  /* 赛季/年份：优先用 season 字段，没有就从日期取 */
+  function seasonOf(m) {
+    if (m.season) return String(m.season);
+    const d = new Date(m.match_date || 0);
+    return isNaN(d) ? '' : String(d.getFullYear());
+  }
+
+  /* 首页赛程行：对阵双方 + 双方战绩 + 场地战绩（比分放最右） */
+  function homeFixtureRow(m, seq) {
+    const db = dayBlock(m.match_date);
+    const fin = m.status === 'finished';
+    let score = '', cls = '';
+    if (fin) {
+      const a = Number(m.our_score) || 0, b = Number(m.opp_score) || 0;
+      score = a + ':' + b;
+      cls = a > b ? 'win' : (a < b ? 'lose' : 'draw');
+    } else if (m.status === 'cancelled') { score = '取消'; cls = 'draw'; }
+    else { score = 'VS'; cls = 'draw'; }
+
+    const us = ourShort();
+    const opp = m.opponent || '待定对手';
+    const or = oppRecord(opp);
+    const v = venueById(m.venue_id);
+    const vr = venueRecord(m.venue_id);
+
+    const oppTxt = or ? (or.w + '胜' + or.d + '平' + or.l + '负  胜率' + or.rate + '%') : '首次交手';
+    const venTxt = v ? (vr ? (vr.w + '胜' + vr.d + '平' + vr.l + '负  胜率' + vr.rate + '%') : '暂无战绩') : '';
+
+    return '<div class="fix hfix" data-mid="' + esc(m.id) + '">' +
+      '<div class="fix-date"><b>' + db.d + '</b><span>' + db.m + '</span></div>' +
+      '<div class="fix-mid">' +
+        /* 第一行：序号 + 对阵双方 */
+        '<div class="hf-top">' +
+          (seq ? '<span class="hf-seq">第' + seq + '场</span>' : '') +
+          '<span class="hf-vs"><b>' + esc(us) + '</b><i>VS</i><b>' + esc(opp) + '</b></span>' +
+        '</div>' +
+        /* 第二行：与该对手的交锋战绩 */
+        '<div class="hf-line"><span class="hf-tag ' + (or ? rateClass(or.rate) : '') + '">' + esc(oppTxt) + '</span></div>' +
+        /* 第三行：场地 + 该场地战绩 */
+        (v ? '<div class="hf-line"><span class="hf-lb">场地：</span><b class="hf-ven">' + esc(v.name) + '</b>' +
+          '<span class="hf-tag ' + (vr ? rateClass(vr.rate) : '') + '">' + esc(venTxt) + '</span></div>'
+          : '<div class="hf-line"><span class="hf-lb">场地待定</span></div>') +
+      '</div>' +
+      '<div class="fix-right"><div class="fix-score ' + cls + '">' + score + '</div>' +
+      '<div style="margin-top:3px"><span class="pill ' + (fin ? 'fin' : 'up') + '">' +
+      (fin ? '已结束' : (m.status === 'cancelled' ? '已取消' : '未开始')) + '</span></div></div>' +
+      '</div>';
+  }
+
   function renderHomeFixtures() {
-    /* 首页只显示最新 5 场：
+    /* 首页只显示最新 5 场（默认排除友谊赛）：
        优先放最近的 2 场未开赛（未来赛程要看得见），
        剩余名额用最近已结束的比赛补足。 */
     const HOME_N = 5, UP_N = 2;
-    const up = ST.matches.filter(m => m.status === 'upcoming')
+    const up = ST.matches.filter(m => m.status === 'upcoming' && isHomeVisible(m))
       .sort((a, b) => new Date(a.match_date || 9e15) - new Date(b.match_date || 9e15))
       .slice(0, UP_N);
-    const fin = finishedMatches().slice(0, Math.max(0, HOME_N - up.length));
+    const fin = finishedMatches().filter(isHomeVisible)
+      .slice(0, Math.max(0, HOME_N - up.length));
     const list = up.concat(fin);
-    $('#homeFixtures').innerHTML = list.length ? list.map(m => fixtureRow(m)).join('') :
-      '<div class="empty"><i>📅</i>暂无赛程，点击右上角 ⚙️ 登录后可添加</div>';
-    $('#fixtureSub').textContent = '共 ' + ST.matches.length + ' 场';
+    const cfgH = APP_CONFIG.home || {};
+    const seqs = cfgH.showSeq === false ? {} : seqMap(cfgH.seqScope || 'visible');
+    $('#homeFixtures').innerHTML = list.length
+      ? list.map(m => homeFixtureRow(m, seqs[m.id])).join('')
+      : '<div class="empty"><i>📅</i>暂无赛程，点击右上角 ⚙️ 登录后可添加</div>';
+    /* 场次小计：也按「首页可见」的口径统计 */
+    const visN = ST.matches.filter(isHomeVisible).length;
+    $('#fixtureSub').textContent = '共 ' + visN + ' 场';
   }
 
   /* limit: 传 0 或 null 表示不限制，有数据的全部显示；clickable: 是否可点进球员信息卡 */
@@ -752,6 +856,13 @@
     const admin = canEdit();
     const vOpts = ST.venues.map(v => '<option value="' + esc(v.id) + '"' + (v.id === m.venue_id ? ' selected' : '') + '>' + esc(v.name) + '</option>').join('');
     let html = '';
+    /* 全年统一编号 */
+    const cfgS2 = APP_CONFIG.home || {};
+    const sq2 = (cfgS2.showSeq === false) ? 0 : (SEQ_ALL[id] || 0);
+    if (sq2) {
+      html += '<div class="note" style="margin-bottom:10px">本年度第 <b>' + sq2 + '</b> 场' +
+        (m.season ? '（' + esc(m.season) + ' 赛季）' : '') + '</div>';
+    }
     if (admin) {
       html +=
         '<div class="fld"><label>对手</label><input class="ipt" id="m_opp" value="' + esc(m.opponent || '') + '"></div>' +
