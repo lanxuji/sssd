@@ -265,7 +265,7 @@
     /* ============ 赛程卡片 ============ */
     cardFixtureH(ctx, d, CW) {
       const list = d.fixtures || [];
-      return 46 + 10 + (list.length ? list.length * 46 : 34) + 14;
+      return 46 + 10 + (list.length ? list.length * 52 : 34) + 14;
     },
     cardFixture(ctx, d, x, y, CW) {
       const h = Poster.cardFixtureH(ctx, d, CW);
@@ -296,17 +296,24 @@
           text(ctx, m.comp, tx + w / 2, cy + 10 + 1, { size: 10, weight: '700', color: '#fff', align: 'center', baseline: 'middle' });
           tx += w + 6;
         }
-        text(ctx, m.home ? '主场' : '客场', tx, cy + 13, { size: 10.5, color: MUTED });
+        /* 场地 + 该场地战绩：放在对手下方（顺序：日期 → 对手 → 场地） */
+        if (m.venue) text(ctx, m.venue, x + 64, cy + 43, { size: 10.5, color: MUTED });
 
-        /* 对手 */
-        text(ctx, ellipsis(ctx, m.opp, CW - 64 - 96), x + 64, cy + 31, { size: 13.5, weight: '700' });
+        /* 对手 + 交锋战绩（同一行，战绩用主色小字） */
+        ctx.font = '700 13.5px ' + FONT;
+        const oppName = ellipsis(ctx, m.opp, CW - 64 - 96);
+        text(ctx, oppName, x + 64, cy + 24, { size: 13.5, weight: '700' });
+        if (m.oppRec) {
+          const ow = ctx.measureText(oppName).width;
+          text(ctx, m.oppRec, x + 64 + ow + 7, cy + 24, { size: 10, weight: '800', color: NAVY });
+        }
 
         /* 比分 / 状态 */
         ctx.font = '800 15px ' + FONT;
         text(ctx, m.score, x + CW - 16, cy + 17, { size: 15, weight: '800', color: m.scoreColor, align: 'right' });
         text(ctx, m.state, x + CW - 16, cy + 31, { size: 10.5, color: MUTED, align: 'right' });
 
-        cy += 46;
+        cy += 52;
       });
       return y + h;
     },

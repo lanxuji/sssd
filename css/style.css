@@ -116,6 +116,15 @@ img{max-width:100%}
 .ctag.c-友谊赛{background:#0E9F6E}
 .ctag.c-内部赛{background:#C89204}
 .fix-home{font-size:10.5px;color:var(--muted)}
+/* 场地徽标：场地名 + 该场地的历史战绩 */
+.fix-venue{flex:none;max-width:100%;display:inline-flex;align-items:center;gap:5px;min-width:0;
+  font-size:10.5px;color:var(--ink-2);background:rgba(11,95,66,.08);
+  border:1px solid var(--hair);border-radius:20px;padding:1px 8px;font-weight:600}
+.fix-venue i{font-style:normal;font-size:10px;color:var(--navy);font-weight:800;
+  white-space:nowrap;opacity:.9}
+/* 场地名过长时截断，战绩完整保留 */
+.fix-venue.has-rec{overflow:hidden}
+.fix-top .fix-venue{overflow:hidden;text-overflow:ellipsis}
 
 /* 榜单表头 + 点球列 */
 .rk-hd{display:flex;align-items:center;gap:9px;padding:0 2px 7px;border-bottom:1px solid var(--hair);font-size:11.5px;color:var(--muted);font-weight:700}
@@ -143,8 +152,16 @@ img{max-width:100%}
 .fix-date b{display:block;font-size:16px;line-height:1.1;color:var(--navy)}
 .fix-date span{font-size:10px;color:var(--muted)}
 .fix-mid{flex:1;min-width:0}
-.fix-opp{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.fix-extra{font-size:11.5px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 对手名：行内跟赛事徽标并排，过长才截断 */
+.fix-opp{font-size:14px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 与对手的历史交锋战绩：跟在对手名后面 */
+.fix-opprec{flex:none;font-size:10px;font-weight:800;color:var(--navy);
+  background:rgba(11,95,66,.10);border:1px solid var(--hair);
+  border-radius:20px;padding:1px 7px;white-space:nowrap;line-height:1.6}
+/* 场地行：整行作为一个容器，内部徽标可换行 */
+.fix-extra{font-size:11.5px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:6px;min-width:0}
+.fix-extra .fix-venue{max-width:100%}
+
 .fix-right{flex:none;text-align:right}
 .fix-score{font-size:17px;font-weight:800;color:var(--navy);letter-spacing:1px}
 .fix-score.win{color:var(--green)}

@@ -24,7 +24,7 @@
   });
 
   /* ★ 版本号：改代码时记得 +1，用于确认用户浏览器拿到的是不是最新版 */
-  const APP_VER = 'v21';
+  const APP_VER = 'v23';
   /* 实际生效的 Service Worker 缓存版本（从 sw.js 里读出来） */
   let SW_VER = '';
   async function readSwVer() {
@@ -181,6 +181,55 @@
     return ST.matches.filter(m => m.status === 'finished').reduce((s, m) => s + (Number(m.our_score) || 0), 0);
   }
   function finishedMatches() { return ST.matches.filter(m => m.status === 'finished'); }
+
+  /* 某场地的历史战绩：胜/平/负 + 胜率（只统计已结束的比赛） */
+  function venueRecord(vid) {
+    if (!vid) return null;
+    const fin = finishedMatches().filter(m => m.venue_id === vid);
+    if (!fin.length) return null;
+    let w = 0, d = 0, l = 0;
+    fin.forEach(m => {
+      const a = Number(m.our_score) || 0, b = Number(m.opp_score) || 0;
+      if (a > b) w++; else if (a < b) l++; else d++;
+    });
+    const n = fin.length;
+    return { n: n, w: w, d: d, l: l, rate: Math.round(w / n * 100) };
+  }
+  /* 把场地战绩渲染成小徽标，如「弘艺 3胜1平 75%」 */
+  function venueTagHtml(m) {
+    const v = venueById(m.venue_id);
+    if (!v) return '';
+    const r = venueRecord(m.venue_id);
+    if (!r) return '<span class="fix-venue">' + esc(v.name) + '</span>';
+    return '<span class="fix-venue has-rec">' + esc(v.name) +
+      '<i>' + r.w + '胜' + r.d + '平' + r.l + '负 · ' + r.rate + '%</i></span>';
+  }
+
+  /* 对手名归一化：去首尾空格、全角空格、统一小写，避免「XX队 / XX队 」算成两个对手 */
+  function normOpp(s) {
+    return String(s || '').replace(/[\s\u3000]+/g, '').toLowerCase();
+  }
+
+  /* 与某个对手的历史交锋：胜/平/负 + 胜率（只算已结束的） */
+  function oppRecord(name) {
+    const key = normOpp(name);
+    if (!key) return null;
+    const fin = finishedMatches().filter(m => normOpp(m.opponent) === key);
+    if (!fin.length) return null;
+    let w = 0, d = 0, l = 0;
+    fin.forEach(m => {
+      const a = Number(m.our_score) || 0, b = Number(m.opp_score) || 0;
+      if (a > b) w++; else if (a < b) l++; else d++;
+    });
+    const n = fin.length;
+    return { n: n, w: w, d: d, l: l, rate: Math.round(w / n * 100) };
+  }
+  /* 交锋战绩徽标：紧跟对手名，如「南海雄鹰 2胜1负 67%」 */
+  function oppTagHtml(m) {
+    const r = oppRecord(m.opponent);
+    if (!r) return '';
+    return '<span class="fix-opprec">' + r.w + '胜' + r.d + '平' + r.l + '负 · ' + r.rate + '%</span>';
+  }
   function wins() { return finishedMatches().filter(m => (Number(m.our_score) || 0) > (Number(m.opp_score) || 0)).length; }
 
   /* ---------------- 渲染 ---------------- */
@@ -256,10 +305,9 @@
       '<div class="st"><b>' + ST.players.filter(x => x.active !== false).length + '</b><span>在队</span></div>';
   }
 
-  function fixtureRow(m, withVenue) {
+  function fixtureRow(m) {
     const db = dayBlock(m.match_date);
     const fin = m.status === 'finished';
-    const home = !!m.is_home;
     let score = '', cls = '';
     if (fin) {
       const a = Number(m.our_score) || 0, b = Number(m.opp_score) || 0;
@@ -268,17 +316,21 @@
     } else if (m.status === 'cancelled') { score = '取消'; cls = 'draw'; }
     else { score = m.match_date ? '未开始' : '待定'; cls = 'draw'; }
     const v = venueById(m.venue_id);
-    const extra = [v ? v.name : '', m.round || ''].filter(Boolean).join(' · ');
     const cp = m.competition || '';
+    /* 排列顺序：日期 → 对手（+ 交锋战绩）→ 场地（+ 场地战绩）
+       赛事徽标作为行首小标签，紧跟对手名 */
     return '<div class="fix" data-mid="' + esc(m.id) + '">' +
       '<div class="fix-date"><b>' + db.d + '</b><span>' + db.m + '</span></div>' +
       '<div class="fix-mid">' +
         '<div class="fix-top">' +
           (cp ? '<span class="ctag c-' + esc(cp) + '">' + esc(cp) + '</span>' : '') +
-          '<span class="fix-home">' + (home ? '主场' : '客场') + '</span>' +
+          '<span class="fix-opp">' + esc(m.opponent || '待定对手') + '</span>' +
+          oppTagHtml(m) +
         '</div>' +
-        '<div class="fix-opp">' + esc(m.opponent || '待定对手') + '</div>' +
-        '<div class="fix-extra">' + esc(extra || '待定') + '</div></div>' +
+        /* 第二行：场地 + 该场地战绩 */
+        '<div class="fix-extra">' +
+          (v ? venueTagHtml(m) : '<span class="fix-venue">场地待定</span>') +
+          esc(m.round || '') + '</div></div>' +
       '<div class="fix-right"><div class="fix-score ' + cls + '">' + score + '</div>' +
       '<div style="margin-top:3px"><span class="pill ' + (fin ? 'fin' : 'up') + '">' + (fin ? '已结束' : (m.status === 'cancelled' ? '已取消' : '未开始')) + '</span>' +
       '</div></div></div>';
@@ -363,7 +415,7 @@
       });
       el.innerHTML = groups.map(g =>
         '<div class="grp-hd"><span>' + esc(g.key) + '</span><i>' + g.list.length + ' 场</i></div>' +
-        g.list.map(m => fixtureRow(m, true)).join('')
+        g.list.map(m => fixtureRow(m)).join('')
       ).join('');
     }
     $$('#allFixtures .fix').forEach(n => n.onclick = () => openMatch(n.dataset.mid));
@@ -1295,10 +1347,19 @@
         state = '已结束';
       } else if (m.status === 'cancelled') { score = '取消'; state = '已取消'; }
       else { state = db.t || '待定'; }
+      /* 场地 + 该场地战绩（与页面一致：日期 → 对手 → 场地） */
+      const vv = venueById(m.venue_id);
+      const vr = venueRecord(m.venue_id);
+      const venueTxt = vv ? (vv.name + (vr ? '  ' + vr.w + '胜' + vr.d + '平' + vr.l + '负 · ' + vr.rate + '%' : ''))
+        : '场地待定';
+      /* 与该对手的历史交锋 */
+      const orr = oppRecord(m.opponent);
+      const oppRecTxt = orr ? (orr.w + '胜' + orr.d + '平' + orr.l + '负 · ' + orr.rate + '%') : '';
       return {
         d: db.d, m: db.m, opp: m.opponent || '待定对手', home: !!m.is_home,
         comp: m.competition || '', compColor: COMP_COLOR[m.competition] || '#1D4ED8',
-        score: score, scoreColor: sc, state: state
+        score: score, scoreColor: sc, state: state,
+        venue: venueTxt, oppRec: oppRecTxt
       };
     });
 
