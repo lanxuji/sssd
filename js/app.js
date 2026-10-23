@@ -24,7 +24,7 @@
   });
 
   /* ★ 版本号：改代码时记得 +1，用于确认用户浏览器拿到的是不是最新版 */
-  const APP_VER = 'v24';
+  const APP_VER = 'v25';
   /* 实际生效的 Service Worker 缓存版本（从 sw.js 里读出来） */
   let SW_VER = '';
   async function readSwVer() {
@@ -462,7 +462,15 @@
     $('#clubIntro').textContent = p.intro || '';
     $('#appTitle').textContent = APP_CONFIG.appName;
     const logo = $('#clubLogo');
-    logo.innerHTML = p.logo_url ? '<img src="' + esc(p.logo_url) + '" alt="">' : esc(String(p.name || '狮').replace(/足球|俱乐部|队/g, '').slice(0, 2) || '狮');
+    const logoFallback = esc(String(p.name || '狮').replace(/足球|俱乐部|队/g, '').slice(0, 2) || '狮');
+    if (logo) {
+      logo.innerHTML = p.logo_url ? '<img src="' + esc(p.logo_url) + '" alt="">' : logoFallback;
+    }
+    /* 顶栏左上角小图标也跟着显示队徽 */
+    const bb = $('#brandBadge');
+    if (bb) {
+      bb.innerHTML = p.logo_url ? '<img src="' + esc(p.logo_url) + '" alt="">' : logoFallback;
+    }
     const r = record();
     /* 近 5 场战绩小球（胜绿 / 平灰 / 负红） */
     const recent = finishedMatches().slice(0, 5).map(m => {
@@ -696,9 +704,14 @@
       '<div class="fld"><label>口号</label><input class="ipt" id="f_slogan" value="' + esc(p.slogan || '') + '"></div>' +
       '<div class="row2"><div class="fld"><label>成立年份</label><input class="ipt" id="f_founded" value="' + esc(p.founded || '') + '"></div>' +
       '<div class="fld"><label>主场</label><input class="ipt" id="f_home" value="' + esc(p.home_venue || '') + '"></div></div>' +
-      '<div class="fld"><label>队徽图片地址（可留空）</label><input class="ipt" id="f_logo" placeholder="https://..." value="' + esc(p.logo_url || '') + '"></div>' +
+      /* 队徽：可直接从手机相册选图（自动裁正方形并压缩），也可填网址 */
+      '<div class="fld"><label>队徽图片</label>' +
+      '<div class="row2"><div><input class="ipt" id="f_logo" placeholder="图片网址（可留空）" value="' + esc(String(p.logo_url || '').slice(0, 30) === 'data:image' ? '' : (p.logo_url || '')) + '"></div>' +
+      '<div><input type="file" accept="image/*" id="f_logofile" class="ipt" style="padding:7px 8px;font-size:12px"></div></div>' +
+      '<div class="note" style="margin-top:6px">点右侧按钮从相册选图，自动裁成正方形并压缩（约 30KB）。留空则显示文字「' + esc(String(p.name || '狮').replace(/足球|俱乐部|队/g, '').slice(0, 2) || '狮') + '」。</div></div>' +
       '<div class="fld"><label>球队简介</label><textarea class="ipt" id="f_intro" rows="4">' + esc(p.intro || '') + '</textarea></div>' +
       '<div class="acts"><button class="btn" id="f_save">保存</button></div>', () => {
+        bindLogoPicker();
         $('#f_save').onclick = async () => {
           try {
             await Store.saveProfile({
@@ -710,6 +723,27 @@
           } catch (e) { toast('保存失败：' + e.message); }
         };
       });
+  }
+
+  /* 队徽选图：裁成正方形 256，压缩 0.78 → dataURL */
+  function bindLogoPicker() {
+    const f = $('#f_logofile'); if (!f) return;
+    f.onchange = () => {
+      const file = f.files[0]; if (!file) return;
+      const img = new Image(); const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const size = 256, c = document.createElement('canvas'); c.width = c.height = size;
+        const ctx = c.getContext('2d');
+        const side = Math.min(img.width, img.height);
+        const sx = (img.width - side) / 2, sy = (img.height - side) / 2;
+        ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+        $('#f_logo').value = c.toDataURL('image/jpeg', 0.78);
+        URL.revokeObjectURL(url);
+        toast('队徽已读取，点保存生效');
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); toast('图片读取失败'); };
+      img.src = url;
+    };
   }
 
   /* ---------------- 比赛 ---------------- */
