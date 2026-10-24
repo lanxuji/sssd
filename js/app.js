@@ -24,7 +24,7 @@
   });
 
   /* ★ 版本号：改代码时记得 +1，用于确认用户浏览器拿到的是不是最新版 */
-  const APP_VER = 'v32';
+  const APP_VER = 'v33';
   /* 实际生效的 Service Worker 缓存版本（从 sw.js 里读出来） */
   let SW_VER = '';
   async function readSwVer() {
@@ -766,16 +766,28 @@
   }
 
   /* limit: 传 0 或 null 表示不限制，有数据的全部显示；clickable: 是否可点进球员信息卡 */
+  /* 前三高亮：名次 + 奖章 emoji + 整行底色（config.rankHighlight 控制） */
   function rankHtml(rows, limit, emptyTxt, clickable) {
     if (!rows.length) return '<div class="empty" style="padding:14px 0">' + (emptyTxt || '暂无数据') + '</div>';
+    const cfgR = APP_CONFIG.rankHighlight || {};
+    const hl = cfgR.enabled !== false;
+    const medal = cfgR.medal !== false;
+    const MEDALS = ['🥇', '🥈', '🥉'];
     const r = limit ? rows.slice(0, limit) : rows;
     return r.map((x, i) => {
       const cls = i === 0 ? 't1' : i === 1 ? 't2' : i === 2 ? 't3' : '';
+      /* 前三名：整行高亮（top1/2/3），并在名字后加奖章 */
+      const top = (hl && i < 3) ? (' top' + (i + 1)) : '';
+      /* 前三：名次位显示奖章 emoji（关掉则仍显示数字） */
+      const noInner = (hl && medal && i < 3)
+        ? '<i class="rk-medal">' + MEDALS[i] + '</i>'
+        : (i + 1);
       const tail = clickable ? '<span class="rk-go">›</span>' : '';
-      return '<div class="rk' + (clickable ? ' tap' : '') + '"' + (clickable ? ' data-pid="' + esc(x.p.id) + '"' : '') + '>' +
-        '<div class="rk-no ' + cls + '">' + (i + 1) + '</div>' +
+      return '<div class="rk' + top + (clickable ? ' tap' : '') + '"' + (clickable ? ' data-pid="' + esc(x.p.id) + '"' : '') + '>' +
+        '<div class="rk-no ' + cls + '">' + noInner + '</div>' +
         avatarHtml(x.p.name, x.p.avatar_url, 'rk-av') +
-        '<div class="rk-nm">' + esc(x.p.name) + (x.p.number ? '<small>#' + esc(x.p.number) + '</small>' : '') + '</div>' +
+        '<div class="rk-nm">' + esc(x.p.name) +
+          (x.p.number ? '<small>#' + esc(x.p.number) + '</small>' : '') + '</div>' +
         '<div class="rk-v">' + x.v + '</div>' + tail + '</div>';
     }).join('');
   }
@@ -1886,6 +1898,25 @@
     if (m) m.classList.remove('on');
     if (v) v.classList.remove('on');
   }
+  /* ★ 绑定关闭入口：之前 closeShot 定义了却没绑任何事件，导致「点关闭无反应」 */
+  function bindShotClose() {
+    const c = $('#shotClose');
+    if (c) c.onclick = e => { e.stopPropagation(); closeShot(); };
+    const m = $('#shotMask');
+    if (m) m.onclick = closeShot;
+    /* ESC / 返回键也能关 */
+    global.addEventListener('keydown', e => {
+      if (e.key === 'Escape') closeShot();
+    });
+    /* 返回键：关截图时先关截图，不要直接退出页面 */
+    global.addEventListener('popstate', closeShot);
+    /* 再点一次 📷 按钮也能关（已打开时） */
+    const b = $('#btnShot');
+    if (b) b.addEventListener('click', () => {
+      const v = $('#shotView');
+      if (v && v.classList.contains('on')) closeShot();
+    });
+  }
   function saveShotToDisk() {
     if (!shotBlob) return toast('请先生成截图');
     const a = document.createElement('a');
@@ -2338,6 +2369,9 @@
   on('#btnShot', 'onclick', doShot);
   on('#btnSaveShot', 'onclick', saveShotToDisk);
   on('#btnShareShot', 'onclick', shareShotToApp);
+  /* ★ 截图预览的关闭入口：之前漏绑，导致点 ✕ 没反应 */
+  on('#shotClose', 'onclick', closeShot);
+  on('#shotMask', 'onclick', closeShot);
 
   /* ---------------- PWA ---------------- */
   let deferredPrompt = null;
@@ -2391,6 +2425,8 @@
     }
     if (!diag.supabase) console.warn('[狮山实达] vendor/supabase.js 未加载 → 无法连云端（请确认该文件已上传）');
     if (!diag.Poster) console.warn('[狮山实达] js/poster.js 未加载 → 截图不可用（请确认该文件已上传）');
+    /* ★ 截图弹窗的关闭入口（✕ / 遮罩 / ESC / 返回键 / 再点📷） */
+    try { bindShotClose(); } catch (e) { console.warn('截图关闭绑定失败', e); }
     try { wechatTip(); } catch (e) { console.warn('微信提示未显示', e); }
     /* 隐藏 ⚙️ 后的入口：网址后加 #admin 即可打开登录 */
     try {
