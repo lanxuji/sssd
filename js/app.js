@@ -24,7 +24,7 @@
   });
 
   /* ★ 版本号：改代码时记得 +1，用于确认用户浏览器拿到的是不是最新版 */
-  const APP_VER = 'v31';
+  const APP_VER = 'v32';
   /* 实际生效的 Service Worker 缓存版本（从 sw.js 里读出来） */
   let SW_VER = '';
   async function readSwVer() {
@@ -58,6 +58,9 @@
   };
   /* 可在比赛详情里单独录入的类型（不含 appear，出场走接龙导入） */
   const EV_INPUT = ['goal', 'assist', 'shoot', 'clear', 'save', 'yellow', 'red'];
+
+  /* 赛事徽标配色：模块级共享（页面渲染与截图都要用） */
+  const COMP_COLOR = { '联赛': '#1D4ED8', '杯赛': '#7C3AED', '友谊赛': '#0E9F6E', '内部赛': '#C89204' };
 
   const ST = { profile: null, players: [], venues: [], matches: [], events: [], role: 'guest', admin: false, recorder: false, user: '', lb: 'goal', comp: '' };
 
@@ -1787,7 +1790,6 @@
   function shotData() {
     const p = ST.profile || DEFAULT_PROFILE;
     const r = record();
-    const COMP_COLOR = { '联赛': '#1D4ED8', '杯赛': '#7C3AED', '友谊赛': '#0E9F6E', '内部赛': '#C89204' };
 
     /* 近期赛程：与首页一致 —— 未来 2 场 + 最近已结束补足到 5 场 */
     const SHOT_N = 5, SHOT_UP = 2;
