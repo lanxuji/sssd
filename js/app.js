@@ -24,7 +24,7 @@
   });
 
   /* ★ 版本号：改代码时记得 +1，用于确认用户浏览器拿到的是不是最新版 */
-  const APP_VER = 'v33';
+  const APP_VER = 'v34';
   /* 实际生效的 Service Worker 缓存版本（从 sw.js 里读出来） */
   let SW_VER = '';
   async function readSwVer() {
@@ -772,6 +772,8 @@
     const cfgR = APP_CONFIG.rankHighlight || {};
     const hl = cfgR.enabled !== false;
     const medal = cfgR.medal !== false;
+    /* 配色由 CSS 的 .rk.top1/2/3 提供，来源同为 config.rankHighlight.colors
+       （测试 tools/rank-highlight-sync-test.js 会校验两边一致） */
     const MEDALS = ['🥇', '🥈', '🥉'];
     const r = limit ? rows.slice(0, limit) : rows;
     return r.map((x, i) => {

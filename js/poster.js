@@ -362,19 +362,36 @@
       Poster.rankCol(ctx, d.assists || [], x + half + 16, cy, half - 32, '#3B6FD4');
       return y + h;
     },
+    /* 榜单前三高亮配色（与网页 style.css 的 .rk.top1/2/3 一致）
+       浅底深字，保证对比度 ≥ 4.5 */
     rankCol(ctx, rows, x, y0, W, accent) {
       let cy = y0;
       if (!rows.length) {
         text(ctx, '暂无数据', x + W / 2, cy + 22, { size: 12, color: MUTED, align: 'center' });
         return;
       }
+      /* ★ 配色取自 APP_CONFIG.rankHighlight.colors（与网页 CSS 同一来源） */
+      const CFG_R = (global.APP_CONFIG && global.APP_CONFIG.rankHighlight) || {};
+      const TOP = (CFG_R.enabled === false) ? [] : (CFG_R.colors || []);
       rows.forEach((r, i) => {
-        const color = i === 0 ? accent : i === 1 ? '#98A2B8' : i === 2 ? '#C0A87A' : MUTED;
-        text(ctx, i + 1, x + 8, cy + 22, { size: 12.5, weight: '800', color: color, align: 'center' });
-        avatar(ctx, r.name, r.avatar, x + 20, cy + 3, 22, NAVY, '#fff');
-        text(ctx, ellipsis(ctx, r.name, W - 60), x + 48, cy + 16, { size: 13, weight: '600' });
+        const t = (TOP && i < 3) ? TOP[i] : null;
+        if (t) {
+          /* 整行高亮底 + 左侧名次竖条 */
+          fillRR(ctx, x - 6, cy + 1, W + 12, 31, 8, t.bg);
+          fillRR(ctx, x - 6, cy + 1, 3, 31, 2, t.bar);
+        }
+        const color = t ? t.bar : MUTED;
+        /* 前三用奖章 emoji，与网页一致 */
+        if (i < 3) {
+          const MEDALS = ['🥇', '🥈', '🥉'];
+          text(ctx, MEDALS[i], x + 8, cy + 22, { size: 13, align: 'center', baseline: 'middle' });
+        } else {
+          text(ctx, i + 1, x + 8, cy + 22, { size: 12.5, weight: '800', color: color, align: 'center' });
+        }
+        avatar(ctx, r.name, r.avatar, x + 20, cy + 3, 22, t ? t.bar : NAVY, '#fff');
+        text(ctx, ellipsis(ctx, r.name, W - 60), x + 48, cy + 16, { size: 13, weight: t ? '800' : '600', color: t ? t.nm : INK });
         text(ctx, '#' + (r.number || '-') + ' · ' + (r.position || '球员'), x + 48, cy + 28, { size: 10.5, color: MUTED });
-        text(ctx, r.v, x + W, cy + 22, { size: 15, weight: '800', color: accent, align: 'right' });
+        text(ctx, r.v, x + W, cy + 22, { size: 15, weight: '800', color: t ? t.v : accent, align: 'right' });
         cy += 34;
       });
     },
