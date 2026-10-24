@@ -1,0 +1,558 @@
+/* ================= 狮山实达数据统计 ================= */
+:root{
+  /* 主色（用作文字/强调，不再做大面积深色底） */
+  --navy:#0B5F42; --navy2:#0E8B60; --gold:#F2B705; --gold-d:#C89204;
+
+  /* ★ 透明扁平（玻璃拟态）主题 */
+  --glass:rgba(255,255,255,.72);      /* 玻璃底色 */
+  --glass-2:rgba(255,255,255,.55);    /* 更透的一层 */
+  --glass-line:rgba(255,255,255,.85); /* 玻璃高光边 */
+  --hair:rgba(11,95,66,.14);          /* 细分割线 */
+  --ink:#0B3B2C;                      /* 主文字（深色，保证浅底可读） */
+  --ink-2:#3E6B5A;                    /* 次级文字 */
+  --ink-3:#6B8A7C;                    /* 弱化文字 */
+  --bg:#F2F4F9; --card:#FFFFFF; --line:#E5E8F0; --txt:#1B2233;
+  --muted:#7A8399; --green:#0E9F6E; --red:#E02424; --blue:#1D4ED8;
+  --bar-h:56px; --tab-h:60px;
+
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+  color:var(--txt);font-size:15px;line-height:1.55;
+  padding-top:var(--bar-h);padding-bottom:calc(var(--tab-h) + env(safe-area-inset-bottom));
+  -webkit-font-smoothing:antialiased;
+  /* 淡渐变底 + 两处柔光斑，让上层半透明玻璃有内容可透 */
+  background:#F4F8F6;
+  background-image:
+    radial-gradient(120% 70% at 12% -8%, rgba(14,139,96,.16) 0%, transparent 60%),
+    radial-gradient(90% 60% at 96% 4%, rgba(242,183,5,.14) 0%, transparent 58%),
+    linear-gradient(180deg,#F7FBF9 0%,#EEF4F1 100%);
+  background-attachment:fixed;
+}
+h2,h3,p{margin:0}
+button{font-family:inherit;font-size:inherit;cursor:pointer;border:0;background:none;color:inherit}
+input,select,textarea{font-family:inherit;font-size:15px}
+img{max-width:100%}
+
+/* ---------- 顶栏 ---------- */
+/* 顶栏：半透明玻璃 + 模糊，深色文字 */
+.appbar{position:fixed;top:0;left:0;right:0;z-index:60;color:var(--ink);
+  background:var(--glass);
+  -webkit-backdrop-filter:saturate(180%) blur(16px);
+  backdrop-filter:saturate(180%) blur(16px);
+  border-bottom:1px solid var(--hair);
+  padding-top:env(safe-area-inset-top)}
+.appbar-in{height:var(--bar-h);display:flex;align-items:center;justify-content:space-between;padding:0 12px}
+.brand{display:flex;align-items:center;gap:9px;min-width:0}
+.brand-badge{width:32px;height:32px;border-radius:9px;background:var(--navy);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:17px;flex:none;overflow:hidden}
+.brand-badge img{width:100%;height:100%;object-fit:cover}
+.brand-txt{min-width:0}
+.brand-txt b{display:block;font-size:15px;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
+.brand-txt small{font-size:11px;color:var(--ink-3)}
+.appbar-acts{display:flex;gap:2px;flex:none}
+.icobtn{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px}
+.icobtn:active{background:rgba(11,95,66,.10)}
+.vertag{background:rgba(11,95,66,.10);color:var(--ink-2)}
+
+/* ---------- 视图 ---------- */
+.view{display:none;padding:12px 12px 20px}
+.view.active{display:block}
+
+/* ---------- 卡片 ---------- */
+/* ---------- 俱乐部卡片（透明玻璃） ---------- */
+.club-card{background:var(--glass);color:var(--ink);border-radius:16px;padding:16px;position:relative;overflow:hidden;
+  border:1px solid var(--glass-line);
+  -webkit-backdrop-filter:saturate(160%) blur(14px);
+  backdrop-filter:saturate(160%) blur(14px);}
+/* 装饰圆：极淡，只做质感不抢内容 */
+.club-card::after{content:"";position:absolute;right:-30px;top:-30px;width:130px;height:130px;border-radius:50%;background:rgba(14,139,96,.10)}
+.club-top{display:flex;gap:12px;align-items:flex-start;position:relative;z-index:2}
+/* 队徽：实心主色（玻璃上唯一的实心块，作为视觉锚点） */
+.club-logo{width:56px;height:56px;border-radius:14px;background:var(--navy);color:#fff;font-weight:800;font-size:22px;display:flex;align-items:center;justify-content:center;flex:none;overflow:hidden}
+.club-logo img{width:100%;height:100%;object-fit:cover}
+.club-meta{min-width:0;flex:1}
+.club-meta h2{font-size:18px;letter-spacing:.5px;line-height:1.3;color:var(--ink);font-weight:800}
+/* 口号：深金，玻璃底上对比足够 */
+.slogan{color:#755000;font-size:13px;margin-top:2px;font-weight:700}
+.club-tags{margin-top:8px;display:flex;flex-wrap:wrap}
+/* 标签：更透的一层玻璃 + 深字 */
+.tag{display:inline-block;background:var(--glass-2);border:1px solid var(--hair);color:var(--ink);font-size:11px;padding:2px 9px;border-radius:20px;margin:0 6px 6px 0;font-weight:600}
+.club-intro{font-size:12.5px;color:var(--ink-2);margin-top:10px;position:relative;z-index:2;line-height:1.7}
+.club-stats{display:flex;margin-top:14px;border-top:1px solid var(--hair);padding-top:12px;position:relative;z-index:2}
+.club-stats .st{flex:1;text-align:center;border-right:1px solid var(--hair)}
+.club-stats .st:last-child{border-right:0}
+/* 数字：主色 + 加粗 */
+.club-stats .st b{display:block;font-size:19px;color:var(--navy);line-height:1.2;font-weight:800}
+.club-stats .st span{font-size:11px;color:var(--ink-3)}
+.club-stats .st span{font-size:11px;color:var(--ink-3)}
+
+/* 近况：战绩小球 + 胜率 */
+.club-form{position:relative;z-index:2;margin-top:12px}
+.formline{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.formlab{font-size:11px;color:var(--ink-3);margin-right:2px;font-weight:600}
+.formrate{margin-left:auto;font-size:11.5px;color:var(--navy);font-weight:800}
+.fm{width:19px;height:19px;border-radius:50%;font-size:10px;font-style:normal;font-weight:800;display:flex;align-items:center;justify-content:center;color:#fff}
+.fm.w{background:#0E9F6E}
+.fm.d{background:#6B7789}
+.fm.l{background:#E02424}
+
+/* 赛事筛选标签 */
+.chips{display:flex;gap:7px;overflow-x:auto;padding-bottom:2px;margin-bottom:10px;-webkit-overflow-scrolling:touch}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;height:30px;padding:0 13px;border-radius:15px;background:var(--glass);border:1px solid var(--hair);font-size:12.5px;color:var(--ink-2);font-weight:600;white-space:nowrap;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.chip.on{background:var(--navy);border-color:var(--navy);color:#fff}
+
+/* 赛程分组标题 */
+.grp-hd{display:flex;align-items:center;justify-content:space-between;padding:4px 2px 8px;font-size:12px;color:var(--muted);font-weight:700;font-style:normal}
+.grp-hd i{font-style:normal;font-weight:400;font-size:11px}
+.grp-hd:not(:first-child){margin-top:6px;padding-top:12px;border-top:1px solid var(--hair)}
+
+/* 赛事徽标 */
+.fix-top{display:flex;align-items:center;gap:6px;margin-bottom:2px;flex-wrap:wrap}
+.ctag{font-size:10px;padding:1px 6px;border-radius:4px;font-weight:700;color:#fff;line-height:1.5}
+.ctag.c-联赛{background:#1D4ED8}
+.ctag.c-杯赛{background:#7C3AED}
+.ctag.c-友谊赛{background:#0E9F6E}
+.ctag.c-内部赛{background:#C89204}
+.fix-home{font-size:10.5px;color:var(--muted)}
+/* 场地徽标：场地名 + 该场地的历史战绩 */
+.fix-venue{flex:none;max-width:100%;display:inline-flex;align-items:center;gap:5px;min-width:0;
+  font-size:10.5px;color:var(--ink-2);background:rgba(11,95,66,.08);
+  border:1px solid var(--hair);border-radius:20px;padding:1px 8px;font-weight:600}
+.fix-venue i{font-style:normal;font-size:10px;color:var(--navy);font-weight:800;
+  white-space:nowrap;opacity:.9}
+/* 场地名过长时截断，战绩完整保留 */
+.fix-venue.has-rec{overflow:hidden}
+.fix-top .fix-venue{overflow:hidden;text-overflow:ellipsis}
+
+/* 榜单表头 + 点球列 */
+.rk-hd{display:flex;align-items:center;gap:9px;padding:0 2px 7px;border-bottom:1px solid var(--hair);font-size:11.5px;color:var(--muted);font-weight:700}
+.rk-hd .rk-c1,.rk .rk-nm.c1{flex:1;min-width:0}
+.rk-hd .rk-c2,.rk .rk-c2{width:42px;flex:none;text-align:center}
+.rk-hd .rk-c3,.rk .rk-v.c3{width:38px;flex:none;text-align:right}
+.rk .rk-nm.c1 small{display:block;font-size:10.5px;color:var(--muted);margin-left:0;margin-top:1px}
+
+/* 点球标记 */
+.ptag{display:inline-block;background:var(--gold);color:var(--navy);font-size:9.5px;font-style:normal;font-weight:800;padding:0 4px;border-radius:3px;margin-left:5px;vertical-align:middle}
+
+.block{background:var(--glass);border-radius:14px;padding:14px;margin-top:12px;border:1px solid var(--glass-line);-webkit-backdrop-filter:saturate(150%) blur(12px);backdrop-filter:saturate(150%) blur(12px)}
+.block-hd{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px}
+.block-hd h3{font-size:15px;font-weight:700;padding-left:9px;border-left:3px solid var(--gold);line-height:1.1}
+.block-sub{font-size:12px;color:var(--muted)}
+.two-col{display:flex;gap:12px;padding:14px 10px}
+.two-col>div{flex:1;min-width:0}
+
+/* ---------- 列表 ---------- */
+.list{display:flex;flex-direction:column}
+.fix{display:flex;align-items:center;padding:10px;border:1px solid var(--hair);border-radius:11px;margin-bottom:9px;background:var(--glass);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);gap:10px}
+.fix:last-child{margin-bottom:0}
+.fix:active{background:#FAFBFF}
+.fix-date{width:48px;flex:none;text-align:center;background:#F4F6FC;border-radius:9px;padding:5px 0}
+.fix-date b{display:block;font-size:16px;line-height:1.1;color:var(--navy)}
+.fix-date span{font-size:10px;color:var(--muted)}
+.fix-mid{flex:1;min-width:0}
+/* 对手名：完整显示，过长换行（不再显示成「四会…」） */
+.fix-opp{font-size:14px;font-weight:600;min-width:0;line-height:1.3;word-break:break-word;overflow-wrap:anywhere}
+/* 与对手的历史交锋战绩：跟在对手名后面 */
+.fix-opprec{flex:none;font-size:10px;font-weight:800;color:var(--navy);
+  background:rgba(11,95,66,.10);border:1px solid var(--hair);
+  border-radius:20px;padding:1px 7px;white-space:nowrap;line-height:1.6}
+/* 胜率分级配色：≤60% 红 / 60~80% 黄 / >80% 绿
+   底色用低透明度，文字用深色，保证浅底玻璃上清晰可读 */
+/* 胜率分级配色统一放在文件靠后位置（见「胜率分级」区块），
+   避免被后面定义的 .hf-tag 等通用徽标样式覆盖 */
+/* ---- 首页赛程行：对阵双方 + 双方战绩 + 场地战绩 ---- */
+.hfix{align-items:flex-start;padding:11px 12px}
+.hfix .fix-date{margin-top:2px}
+.hfix .fix-mid{min-width:0}
+/* 第一行：序号 + 实达 VS 旺旺 */
+.hf-top{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px}
+.hf-seq{flex:none;font-size:10.5px;font-weight:800;color:#fff;background:var(--navy);
+  border-radius:5px;padding:2px 6px;line-height:1.4}
+.hf-vs{display:inline-flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap;
+  font-size:14.5px;font-weight:700;line-height:1.35}
+.hf-vs b{word-break:break-word;overflow-wrap:anywhere}
+.hf-vs i{font-style:normal;font-size:11.5px;font-weight:800;color:var(--ink-3);
+  background:rgba(11,95,66,.09);border-radius:4px;padding:1px 5px;flex:none}
+/* 战绩行 */
+.hf-line{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:3px;font-size:11px}
+.hf-lb{flex:none;color:var(--muted);font-weight:600}
+.hf-ven{font-size:12px;font-weight:700;color:var(--ink-2);margin-right:2px}
+.hf-tag{flex:none;font-size:10.5px;font-weight:800;padding:1px 7px;border-radius:20px;
+  border:1px solid var(--hair);background:rgba(11,95,66,.08);color:var(--navy);white-space:nowrap}
+/* 比分右侧 */
+.hfix .fix-right{margin-top:2px}
+
+/* 场地行：整行作为一个容器，内部徽标可换行 */
+.fix-extra{font-size:11.5px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:6px;min-width:0}
+.fix-extra .fix-venue{max-width:100%}
+
+.fix-right{flex:none;text-align:right}
+.fix-score{font-size:17px;font-weight:800;color:var(--navy);letter-spacing:1px}
+.fix-score.win{color:var(--green)}
+.fix-score.lose{color:var(--red)}
+.fix-score.draw{color:var(--muted)}
+.pill{display:inline-block;font-size:10.5px;padding:1px 7px;border-radius:20px;background:#EEF2FA;color:var(--navy);border:1px solid #DDE4F2}
+.pill.up{background:#E8F7F0;color:var(--green);border-color:#C9EDDD}
+.pill.fin{background:#EEF2FA;color:var(--muted)}
+.pill.home{background:#FFF6E0;color:var(--gold-d);border-color:#F5E3B0}
+
+/* ---------- 榜单 ---------- */
+.rank{display:flex;flex-direction:column}
+.rk{display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px dashed #EDF0F7}
+.rk:last-child{border-bottom:0}
+.rk-no{width:22px;flex:none;text-align:center;font-size:12px;font-weight:800;color:var(--muted)}
+.rk-no.t1{color:#D4A100} .rk-no.t2{color:#8E9AAE} .rk-no.t3{color:#C08040}
+.rk-av{width:28px;height:28px;border-radius:50%;background:#EEF2FA;color:var(--navy);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none;overflow:hidden}
+.rk-av img{width:100%;height:100%;object-fit:cover}
+.rk-nm{flex:1;min-width:0;font-size:13.5px;line-height:1.35;
+  word-break:break-word;overflow-wrap:anywhere}
+.rk-nm small{color:var(--muted);font-size:11px;margin-left:4px}
+.rk-v{font-size:14px;font-weight:800;color:var(--navy);flex:none}
+/* 可点进球员信息卡的榜单行 */
+.rk.tap{cursor:pointer;transition:background .15s,transform .1s}
+.rk.tap:active{background:rgba(11,95,66,.07);transform:scale(.995)}
+.rk-go{flex:none;margin-left:6px;font-size:16px;color:var(--ink-3);line-height:1}
+.rank.big .rk{padding:10px 2px}
+.rank.big .rk-nm{font-size:14.5px}
+.rank.big .rk-v{font-size:17px}
+
+/* ---------- 球员 / 场地卡片 ---------- */
+.cards{display:flex;flex-direction:column}
+.card{display:flex;align-items:center;gap:11px;border:1px solid var(--hair);border-radius:12px;padding:11px;margin-bottom:9px;background:var(--glass);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.card:active{background:#FAFBFF}
+.c-av{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--navy),var(--navy2));color:var(--gold);font-weight:800;font-size:15px;display:flex;align-items:center;justify-content:center;flex:none;overflow:hidden}
+.c-av img{width:100%;height:100%;object-fit:cover}
+.c-num{position:relative}
+.c-num:after{content:attr(data-num);position:absolute;right:-3px;bottom:-3px;background:var(--gold);color:var(--navy);font-size:10px;font-weight:800;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px;border:1.5px solid #fff}
+.c-mid{flex:1;min-width:0}
+.c-t{font-size:14.5px;font-weight:600}
+.c-s{font-size:11.5px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c-g{margin-left:4px}
+
+/* ---------- 工具栏 ---------- */
+.toolbar{display:flex;gap:9px;align-items:center;margin-bottom:12px}
+.toolbar .ipt,.toolbar .sel{flex:1;min-width:0}
+.ipt,.sel{height:38px;border:1px solid var(--hair);border-radius:10px;padding:0 11px;background:rgba(255,255,255,.86);width:100%;color:var(--txt);outline:none}
+.ipt:focus,.sel:focus{border-color:var(--navy)}
+textarea.ipt{height:auto;padding:9px 11px;line-height:1.6}
+.btn{height:38px;padding:0 15px;border-radius:10px;background:var(--navy);color:#fff;font-weight:600;font-size:14px;white-space:nowrap;flex:none}
+.btn:active{opacity:.85}
+.btn.ghost{background:rgba(255,255,255,.7);color:var(--navy);border:1px solid var(--hair)}
+.btn.gold{background:var(--gold);color:var(--navy)}
+.btn.red{background:rgba(255,255,255,.7);color:var(--red);border:1px solid rgba(224,36,36,.28)}
+.btn.wide{width:100%;display:block}
+.btn.sm{height:32px;padding:0 11px;font-size:13px}
+.hint{font-size:12.5px;color:var(--muted);flex:1}
+.tabs{display:flex;background:var(--glass);border:1px solid var(--hair);border-radius:11px;padding:3px;margin-bottom:12px;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.tab{flex:1;height:34px;border-radius:9px;font-size:13.5px;color:var(--muted);font-weight:600}
+.tab.active{background:var(--navy);color:#fff}
+
+/* ---------- 底部导航 ---------- */
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:60;background:var(--glass);border-top:1px solid var(--hair);display:flex;height:var(--tab-h);padding-bottom:env(safe-area-inset-bottom);-webkit-backdrop-filter:saturate(180%) blur(16px);backdrop-filter:saturate(180%) blur(16px)}
+.tbtn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--muted)}
+.tbtn i{font-size:20px;line-height:1;font-style:normal}
+.tbtn span{font-size:11px}
+.tbtn.active{color:var(--navy)}
+.tbtn.active i{transform:translateY(-1px)}
+
+/* ---------- 弹窗 ---------- */
+.mask{position:fixed;inset:0;background:rgba(10,16,32,.45);z-index:80;display:none}
+.mask.on{display:block}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:90;background:rgba(255,255,255,.90);border-radius:18px 18px 0 0;max-height:88vh;display:none;flex-direction:column;padding-bottom:env(safe-area-inset-bottom);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);border-top:1px solid var(--hair)}
+.sheet.on{display:flex}
+.sheet-hd{display:flex;align-items:center;justify-content:space-between;padding:13px 14px;border-bottom:1px solid var(--hair)}
+.sheet-hd b{font-size:16px}
+.sheet-bd{padding:14px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.fld{margin-bottom:12px}
+.fld label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:5px;font-weight:600}
+.row2{display:flex;gap:10px}
+.row2>div{flex:1;min-width:0}
+.acts{display:flex;gap:10px;margin-top:6px}
+.acts .btn{flex:1}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{flex:1;height:36px;font-size:13.5px;color:var(--muted);border-right:1px solid var(--hair)}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--navy);color:#fff}
+.seg.five button{font-size:12.5px;padding:0 2px}
+/* 事件类型较多（7 项）时自动换行，避免挤成一条 */
+.seg.wrap{flex-wrap:wrap}
+.seg.wrap button{flex:0 0 33.3333%;border-bottom:1px solid var(--hair);height:34px;font-size:13px}
+.seg.wrap button:nth-last-child(-n+1){border-bottom:0}
+/* 列表里新增的两类徽标配色 */
+.ev-b.c{background:rgba(29,78,216,.14);color:#1D4ED8}
+.ev-b.v{background:rgba(124,58,237,.14);color:#7C3AED}
+.tabs.six{overflow-x:auto}
+.tabs.six .tab{flex:none;min-width:52px;font-size:12.5px}
+
+/* 事件行 */
+.ev{display:flex;align-items:center;gap:9px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px;background:#FBFBFE}
+.ev-b{width:38px;flex:none;text-align:center;font-size:11px;font-weight:800;border-radius:7px;padding:3px 0;background:#FFF3D6;color:var(--gold-d)}
+.ev-b.a{background:#E4EEFF;color:var(--blue)}
+.ev-b.s{background:#EEF2FA;color:#5A6B8C}
+.ev-b.y{background:#FFF0C2;color:#A87B00}
+.ev-b.r{background:#FDE3E3;color:#C81E1E}
+.ev-m{flex:1;min-width:0;font-size:13.5px}
+.ev-m small{color:var(--muted);font-size:11.5px;margin-left:6px}
+.ev-x{width:26px;height:26px;border-radius:7px;background:#FDECEC;color:var(--red);font-size:13px;flex:none}
+
+.empty{text-align:center;color:var(--muted);font-size:13px;padding:26px 10px}
+.empty i{display:block;font-size:30px;margin-bottom:6px;font-style:normal;opacity:.5}
+
+/* ---------- 截图 ---------- */
+.shot-wrap{background:var(--bg);border-radius:12px;padding:8px}
+.shot-foot{display:flex;justify-content:space-between;margin-top:12px;padding:10px 14px;background:rgba(11,95,66,.08);color:var(--ink-2);border:1px solid var(--hair);border-radius:10px;font-size:11.5px}
+.shotview{position:fixed;left:0;right:0;bottom:0;top:0;z-index:100;background:#fff;display:none;flex-direction:column}
+.shotview.on{display:flex}
+.shotview-hd{display:flex;align-items:center;justify-content:space-between;padding:13px 14px;border-bottom:1px solid var(--hair)}
+.shotview-bd{flex:1;overflow-y:auto;background:#EDEFF5;padding:12px;text-align:center}
+.shotview-bd img{width:100%;border-radius:10px;display:block;box-shadow:0 4px 18px rgba(0,0,0,.15)}
+.shotview-ft{display:flex;gap:10px;padding:12px 14px;border-top:1px solid var(--hair)}
+.shotview-ft .btn{flex:1}
+.tip{font-size:12px;color:var(--muted);text-align:center;padding:0 14px 14px;margin:0}
+
+/* ---------- toast ---------- */
+.toast{position:fixed;left:50%;bottom:calc(var(--tab-h) + 26px);transform:translateX(-50%) translateY(12px);background:rgba(20,38,90,.95);color:#fff;font-size:13.5px;padding:9px 16px;border-radius:22px;z-index:200;opacity:0;pointer-events:none;transition:.22s;max-width:82%;text-align:center}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ---------- 管理面板 ---------- */
+.admin-item{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--hair)}
+.admin-item:last-child{border-bottom:0}
+.admin-item .ai-l b{display:block;font-size:14px}
+.admin-item .ai-l small{font-size:11.5px;color:var(--muted)}
+.badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;background:#E8F7F0;color:var(--green);border:1px solid #C9EDDD}
+.badge.warn{background:#FFF6E0;color:var(--gold-d);border-color:#F5E3B0}
+.badge.off{background:#F1F2F6;color:var(--muted);border-color:#E3E6EE}
+.note{background:#F7F9FD;border:1px solid var(--line);border-radius:10px;padding:11px;font-size:12.5px;color:var(--muted);line-height:1.7;margin-bottom:12px}
+.code{background:#0F1B33;color:#B9E0FF;font-size:11.5px;padding:10px;border-radius:8px;overflow-x:auto;white-space:pre-wrap;word-break:break-all;line-height:1.6;margin:8px 0}
+
+/* ===================== 球员信息卡（星光动效） ===================== */
+.pd{padding-bottom:6px}
+
+/* 舞台：全身照 + 环绕星光 */
+.pd-stage{position:relative;height:290px;margin:2px 0 6px;display:flex;align-items:flex-end;justify-content:center;overflow:hidden}
+
+/* 背后柔光 */
+.pd-glow{position:absolute;left:50%;top:44%;width:230px;height:230px;transform:translate(-50%,-50%);
+  background:radial-gradient(circle,rgba(242,183,5,.22) 0%,rgba(14,139,96,.13) 45%,transparent 70%);
+  border-radius:50%;animation:pd-breathe 4.2s ease-in-out infinite;pointer-events:none}
+@keyframes pd-breathe{
+  0%,100%{transform:translate(-50%,-50%) scale(1);opacity:.85}
+  50%{transform:translate(-50%,-50%) scale(1.10);opacity:1}
+}
+
+/* 脚下光环 */
+.pd-halo{position:absolute;left:50%;bottom:14px;width:150px;height:26px;transform:translateX(-50%);
+  background:radial-gradient(ellipse at center,rgba(11,95,66,.22) 0%,transparent 70%);
+  border-radius:50%;animation:pd-halo 3.4s ease-in-out infinite;pointer-events:none}
+@keyframes pd-halo{
+  0%,100%{transform:translateX(-50%) scaleX(1);opacity:.55}
+  50%{transform:translateX(-50%) scaleX(1.16);opacity:.9}
+}
+
+/* 环绕星光：整体缓慢旋转 */
+.pd-stars{position:absolute;left:50%;top:50%;width:0;height:0;
+  animation:pd-orbit 16s linear infinite;pointer-events:none}
+@keyframes pd-orbit{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+
+/* 单个光点：反向自转保持自身朝向，同时闪烁缩放 */
+.pd-star{position:absolute;left:0;top:0;width:var(--s,4px);height:var(--s,4px);border-radius:50%;
+  background:var(--navy);box-shadow:0 0 8px rgba(11,95,66,.55);
+  transform:rotate(var(--a)) translateX(var(--r)) rotate(calc(-1 * var(--a)));
+  animation:pd-twinkle 2.4s ease-in-out infinite;animation-delay:var(--d,0s)}
+.pd-star:nth-child(3n){background:var(--gold);box-shadow:0 0 8px rgba(242,183,5,.85)}
+.pd-star:nth-child(4n){background:#2F8F6B;box-shadow:0 0 8px rgba(47,143,107,.7)}
+@keyframes pd-twinkle{
+  0%,100%{opacity:.25;scale:.7}
+  50%{opacity:1;scale:1.25}
+}
+
+/* 全身照 */
+.pd-body{position:relative;z-index:3;display:flex;align-items:flex-end;justify-content:center;height:100%}
+.pd-cv{height:272px;width:auto;display:block;
+  animation:pd-in .62s cubic-bezier(.22,1.3,.36,1) both;filter:drop-shadow(0 6px 14px rgba(20,38,90,.18))}
+/* 真实照片：保持比例、底部对齐，加底部淡出让边缘融进背景 */
+.pd-photo{object-fit:contain;object-position:bottom;max-height:284px;max-width:100%;
+  -webkit-mask-image:linear-gradient(to bottom,#000 78%,transparent 100%);
+  mask-image:linear-gradient(to bottom,#000 78%,transparent 100%)}
+@keyframes pd-in{
+  from{opacity:0;transform:translateY(26px) scale(.9)}
+  to{opacity:1;transform:translateY(0) scale(1)}
+}
+.pd-fallback{width:96px;height:96px;border-radius:50%;background:var(--navy);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:40px;font-weight:800;margin-bottom:70px}
+
+/* 姓名 / 徽标 */
+.pd-name{text-align:center;font-size:20px;font-weight:800;letter-spacing:.5px;color:var(--ink);
+  animation:pd-fade .5s ease .18s both}
+.pd-badges{display:flex;justify-content:center;gap:7px;flex-wrap:wrap;margin-top:8px;
+  animation:pd-fade .5s ease .26s both}
+.pd-num{background:var(--navy);color:var(--gold);font-weight:800;font-size:13px;padding:3px 11px;border-radius:11px}
+.pd-pos{background:rgba(11,95,66,.10);color:var(--ink-2);font-weight:700;font-size:12.5px;padding:3px 11px;border-radius:11px}
+.pd-join{background:rgba(11,95,66,.08);color:var(--ink-3);font-size:12px;padding:3px 10px;border-radius:11px}
+@keyframes pd-fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* 数据四宫格 */
+.pd-stats{display:flex;gap:8px;margin-top:16px;animation:pd-fade .5s ease .32s both}
+.pd-st{flex:1;background:var(--glass-2);border:1px solid var(--hair);border-radius:12px;padding:11px 4px;text-align:center}
+.pd-st b{display:block;font-size:19px;color:var(--navy);line-height:1.2}
+.pd-st span{font-size:11px;color:var(--muted)}
+
+/* 球衣切换 */
+.pd-kits{display:flex;gap:7px;justify-content:center;margin-top:12px;flex-wrap:wrap;
+  animation:pd-fade .5s ease .38s both}
+.kit{display:flex;align-items:center;gap:5px;height:32px;padding:0 11px;border-radius:16px;
+  background:rgba(255,255,255,.6);border:1px solid var(--hair);font-size:12.5px;color:var(--ink-2);font-weight:600}
+.kit.on{background:var(--navy);border-color:var(--navy);color:#fff}
+.kit-sw{width:13px;height:13px;border-radius:4px;border:2px solid #ccc;display:inline-block}
+
+/* 近 5 场 */
+.pd-sec{display:flex;align-items:center;justify-content:space-between;margin:16px 0 8px;
+  font-size:13.5px;font-weight:800;animation:pd-fade .5s ease .44s both}
+.pd-sec i{font-style:normal;font-size:11.5px;font-weight:400;color:var(--muted)}
+.pd-recent{border:1px solid var(--hair);border-radius:12px;overflow:hidden;background:rgba(255,255,255,.55);
+  animation:pd-fade .5s ease .5s both}
+.pd-r{display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid var(--hair);
+  position:relative;font-size:13px}
+.pd-r:last-child{border-bottom:0}
+.pd-r::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:#8E9AAE}
+.pd-r.w::before{background:#0E9F6E}
+.pd-r.l::before{background:#E02424}
+.pd-rd{width:40px;flex:none;color:var(--muted);font-size:12px}
+.pd-ro{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.pd-rv{display:flex;gap:5px;flex:none}
+.pd-rv b{font-size:11px;font-weight:800;padding:1px 6px;border-radius:5px}
+.pd-rv b.g{background:#FFF3D6;color:var(--gold-d)}
+.pd-rv b.a{background:#E4EEFF;color:var(--blue)}
+.pd-rv b.y{background:#FFF0C2;color:#A87B00}
+.pd-rv b.r{background:#FDE3E3;color:#C81E1E}
+.pd-rv em{font-style:normal;font-size:11px;color:var(--muted)}
+
+/* 信息卡模式：内容区依次淡入，星光在弹窗内可见 */
+#sheet.pd-mode .sheet-bd{padding-top:6px}
+
+/* 尊重系统「减少动效」设置 */
+@media (prefers-reduced-motion:reduce){
+  .pd-glow,.pd-halo,.pd-stars,.pd-star,.pd-cv,.pd-name,.pd-badges,.pd-stats,.pd-kits,.pd-sec,.pd-recent,
+  #sheet.pd-mode{animation:none!important}
+}
+
+/* 微信内打开时的顶部提示条 */
+body.has-wxtip{padding-top:calc(var(--bar-h) + 38px)}
+.wx-tip{position:fixed;top:var(--bar-h);left:0;right:0;z-index:59;
+  display:flex;align-items:center;gap:8px;padding:7px 12px;font-size:12.5px;
+  background:rgba(242,183,5,.20);color:#6B4A00;
+  -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+  border-bottom:1px solid rgba(242,183,5,.34);
+  transition:opacity .5s;animation:wx-in .35s ease both}
+.wx-tip.fade{opacity:.55}
+.wx-tip span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wx-tip b{flex:none;font-size:12.5px;color:var(--navy);font-weight:800}
+.wx-tip i{flex:none;font-style:normal;font-size:15px;opacity:.55;padding:0 2px}
+@keyframes wx-in{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+
+/* 顶部模式标签：本机模式时标红警示 */
+#modeTag.warn{color:#C0392B;font-weight:700}
+
+/* 版本号标记：顶部状态栏一行小字，点 5 次复制诊断信息 */
+.vertag{font-style:normal;display:inline-block;margin-left:5px;padding:0 5px;border-radius:6px;
+  background:rgba(255,255,255,.16);color:#fff;font-size:10px;font-weight:700;letter-spacing:.3px;
+  vertical-align:middle;cursor:pointer}
+
+/* ===================== 手机友好优化 ===================== */
+/* iOS 上字号小于 16px 的输入框会触发页面自动缩放，这里统一 16px */
+.ipt,.sel{font-size:16px}
+/* 触控目标不小于 44px */
+.ipt,.sel{height:46px}
+.btn{height:46px;font-size:15.5px}
+.btn.sm{height:36px}
+.chip{height:36px;padding:0 15px;font-size:13.5px}
+.tab{height:40px;font-size:14px}
+.icobtn{width:40px;height:40px}
+.ev-x{width:32px;height:32px}
+/* 大号输入（录入页用） */
+.ipt.big,.sel.big{height:50px;font-size:16.5px}
+.btn.big{height:52px;font-size:16.5px;font-weight:700}
+/* 录入页：进球 / 助攻行 */
+/* 录入行：球员 + 进球 + 助攻 并排一行 */
+.evrow{display:flex;align-items:center;gap:7px;margin-bottom:8px}
+.evrow .ev-p{flex:1;min-width:0}
+/* 进球 / 助攻两个窄数字框并排 */
+.evrow .ev-n{width:52px;flex:none;text-align:center;font-weight:700;padding:0 4px;font-size:15px}
+.evrow .ev-del{width:38px;height:46px;flex:none;border-radius:10px;background:#FDECEC;color:var(--red);font-size:15px}
+/* 列表头：标出哪一列是进球、哪一列是助攻 */
+.ev-head{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--ink-3);
+  font-weight:700;padding:0 1px 6px}
+.ev-head span:nth-child(1){flex:1;min-width:0}
+.ev-head span:nth-child(2),.ev-head span:nth-child(3){width:52px;flex:none;text-align:center}
+.ev-head span:nth-child(4){width:38px;flex:none}
+/* 比分输入 */
+.score-row{display:flex;align-items:center;gap:10px}
+.score-row .ipt{flex:1;text-align:center;font-weight:800;font-size:20px}
+.score-row .vs{font-size:22px;font-weight:800;color:var(--muted);flex:none}
+/* 录入页卡片去掉多余内边距，方便单手操作 */
+.block.rc{padding:14px 12px}
+.block.rc .fld{margin-bottom:10px}
+/* 紧凑：一行放两个字段（日期 / 场地，对手 / 比分） */
+.fld-row{display:flex;gap:9px;margin-bottom:10px}
+.fld-row>.fld{flex:1;min-width:0;margin-bottom:0}
+/* 比分框固定宽度，避免挤扁对手输入框 */
+.rc-score{width:126px;flex:none}
+.rc-score .score-row{gap:6px}
+.rc-score .score-row .ipt{font-size:17px;padding:0 6px;height:44px}
+.rc-score .vs{font-size:17px}
+/* 继续录入选择器 */
+.rc-pick{margin-bottom:12px}
+/* 本机模式警告：录入的数据只有自己看得到，必须醒目 */
+.rc-warn{background:#FFF2F0;border:1px solid rgba(224,36,36,.32);color:#9B1C1C;margin-bottom:12px;line-height:1.7}
+/* 已导入的出场名单提示 */
+.rc-lineup{background:rgba(14,159,110,.10);border:1px solid rgba(14,159,110,.28);
+  color:#0A6B4A;margin-bottom:12px;line-height:1.7}
+.rc-lineup b{color:#0A6B4A}
+/* 接龙关联：左侧昵称，右侧选球员 */
+.jl-nick{flex:none;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:13px;font-weight:700;color:var(--ink)}
+.evrow .jl-sel{flex:1}
+.rc-pick select{font-weight:600}
+/* 输入框去掉预填提示后的留白仍要够大，方便点按 */
+.block.rc .ipt{height:44px}
+/* 底部导航加高，文字更清楚 */
+.tabbar{height:62px}
+.tbtn i{font-size:22px}
+.tbtn span{font-size:11.5px;font-weight:600}
+.tbtn.active span{font-weight:800}
+/* 表单标签更醒目 */
+.fld label{font-size:13px;color:#5A6B8C}
+/* 数字输入框去掉右侧箭头，视觉更干净 */
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+input[type=number]{-moz-appearance:textfield}
+
+@media (min-width:640px){
+  body{max-width:520px;margin:0 auto;background:#E9ECF4}
+  .appbar,.tabbar,.sheet,.shotview{max-width:520px;left:50%;right:auto;transform:translateX(-50%)}
+  .tabbar,.appbar{width:100%}
+  .sheet,.shotview{width:100%}
+}
+
+/* ============================================================
+ *  胜率分级配色（必须放在所有徽标样式之后，否则会被 .hf-tag 覆盖）
+ *  ≤60% 红 / 60~80% 黄 / >80% 绿
+ *  用双类选择器提高优先级，保证首页、赛程页颜色一致
+ * ============================================================ */
+.hf-tag.rt-low,.fix-opprec.rt-low,.fix-venue.rt-low{
+  background:rgba(224,36,36,.15);border-color:rgba(224,36,36,.40);color:#A01111}
+.hf-tag.rt-mid,.fix-opprec.rt-mid,.fix-venue.rt-mid{
+  background:rgba(217,164,4,.20);border-color:rgba(217,164,4,.46);color:#7A5A00}
+.hf-tag.rt-high,.fix-opprec.rt-high,.fix-venue.rt-high{
+  background:rgba(14,159,110,.18);border-color:rgba(14,159,110,.42);color:#0A6B4A}
+/* 场地徽标里的战绩小字（<i>）跟随同色 */
+.fix-venue.rt-low i{color:#A01111}
+.fix-venue.rt-mid i{color:#7A5A00}
+.fix-venue.rt-high i{color:#0A6B4A}
+/* 兜底：任何带 rt-* 的元素都能上色 */
+.rt-low{background-color:rgba(224,36,36,.15);border-color:rgba(224,36,36,.40);color:#A01111}
+.rt-mid{background-color:rgba(217,164,4,.20);border-color:rgba(217,164,4,.46);color:#7A5A00}
+.rt-high{background-color:rgba(14,159,110,.18);border-color:rgba(14,159,110,.42);color:#0A6B4A}
