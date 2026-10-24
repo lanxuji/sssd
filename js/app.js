@@ -24,7 +24,7 @@
   });
 
   /* ★ 版本号：改代码时记得 +1，用于确认用户浏览器拿到的是不是最新版 */
-  const APP_VER = 'v30';
+  const APP_VER = 'v31';
   /* 实际生效的 Service Worker 缓存版本（从 sw.js 里读出来） */
   let SW_VER = '';
   async function readSwVer() {
@@ -580,46 +580,60 @@
   }
 
   /* 首页赛程行：对阵双方 + 双方战绩 + 场地战绩（比分放最右） */
-  function homeFixtureRow(m, seq) {
+  /* ★ 首页赛程行的唯一数据源
+     页面（DOM）和截图（Canvas）都从这里取字段 —— 改这里两边同步，
+     不会再出现「页面改了截图没跟上」。 */
+  function homeFixtureData(m, seq) {
     const db = dayBlock(m.match_date);
     const fin = m.status === 'finished';
-    let score = '', cls = '';
+    let score = '', scoreColor = '#6B7280', state = '';
     if (fin) {
       const a = Number(m.our_score) || 0, b = Number(m.opp_score) || 0;
       score = a + ':' + b;
-      cls = a > b ? 'win' : (a < b ? 'lose' : 'draw');
-    } else if (m.status === 'cancelled') { score = '取消'; cls = 'draw'; }
-    else { score = 'VS'; cls = 'draw'; }
+      scoreColor = a > b ? '#0B7A4B' : (a < b ? '#C62828' : '#6B7280');
+      state = '已结束';
+    } else if (m.status === 'cancelled') { score = '取消'; scoreColor = '#6B7280'; state = '已取消'; }
+    else { score = 'VS'; scoreColor = '#6B7280'; state = '未开始'; }
 
-    const us = ourShort();
-    const opp = m.opponent || '待定对手';
-    /* 首页默认不显示「友谊赛」等赛事标签（config.home.showCompTag 控制） */
-    const showTag = (APP_CONFIG.home || {}).showCompTag !== false;
-    const compTag = (showTag && m.competition)
-      ? '<span class="ctag c-' + esc(m.competition) + '">' + esc(m.competition) + '</span>' : '';
+    const cfgH = APP_CONFIG.home || {};
+    const showTag = cfgH.showCompTag !== false;
     const v = venueById(m.venue_id);
+    return {
+      d: db.d, m: db.m,
+      seq: seq || 0,                                  // 本年度第几场（0 = 不显示）
+      us: ourShort(),                                 // 我方简称
+      opp: m.opponent || '待定对手',
+      comp: showTag ? (m.competition || '') : '',     // 赛事标签（默认不显示）
+      compColor: COMP_COLOR[m.competition] || '#1D4ED8',
+      venueName: v ? v.name : '',                     // 只显示场地名，战绩在弹窗里
+      venueId: v ? v.id : '',
+      score: score, scoreColor: scoreColor, state: state
+    };
+  }
 
+  function homeFixtureRow(m, seq) {
+    const t = homeFixtureData(m, seq);
     /* 首页只放「对阵双方 + 场地名 + 比分」，
        胜负平 / 胜率移到点击后弹出的详情里，行本身保持干净 */
     return '<div class="fix hfix" data-mid="' + esc(m.id) + '">' +
-      '<div class="fix-date"><b>' + db.d + '</b><span>' + db.m + '</span></div>' +
+      '<div class="fix-date"><b>' + esc(t.d) + '</b><span>' + esc(t.m) + '</span></div>' +
       '<div class="fix-mid">' +
         '<div class="hf-top">' +
-          (seq ? '<span class="hf-seq">第' + seq + '场</span>' : '') + compTag +
+          (t.seq ? '<span class="hf-seq">第' + t.seq + '场</span>' : '') +
+          (t.comp ? '<span class="ctag c-' + esc(t.comp) + '">' + esc(t.comp) + '</span>' : '') +
           /* 对手名可点 → 弹出与该对手的交锋战绩 */
-          '<span class="hf-vs"><b>' + esc(us) + '</b><i>VS</i>' +
-          '<b class="hf-link" data-opp="' + esc(opp) + '">' + esc(opp) + '</b></span>' +
+          '<span class="hf-vs"><b>' + esc(t.us) + '</b><i>VS</i>' +
+          '<b class="hf-link" data-opp="' + esc(t.opp) + '">' + esc(t.opp) + '</b></span>' +
         '</div>' +
         /* 场地名可点 → 弹出定位 + 该场地战绩 */
         '<div class="hf-line">' +
-          (v ? '<span class="hf-lb">场地：</span>' +
-              '<b class="hf-ven hf-link" data-vid="' + esc(v.id) + '">' + esc(v.name) + '</b>'
+          (t.venueName ? '<span class="hf-lb">场地：</span>' +
+              '<b class="hf-ven hf-link" data-vid="' + esc(t.venueId) + '">' + esc(t.venueName) + '</b>'
             : '<span class="hf-lb">场地待定</span>') +
         '</div>' +
       '</div>' +
-      '<div class="fix-right"><div class="fix-score ' + cls + '">' + score + '</div>' +
-      '<div style="margin-top:3px"><span class="pill ' + (fin ? 'fin' : 'up') + '">' +
-      (fin ? '已结束' : (m.status === 'cancelled' ? '已取消' : '未开始')) + '</span></div></div>' +
+      '<div class="fix-right"><div class="fix-score">' + esc(t.score) + '</div>' +
+      '<div style="margin-top:3px"><span class="pill">' + esc(t.state) + '</span></div></div>' +
       '</div>';
   }
 
@@ -1780,30 +1794,18 @@
     const up = ST.matches.filter(m => m.status === 'upcoming')
       .sort((a, b) => new Date(a.match_date || 9e15) - new Date(b.match_date || 9e15)).slice(0, SHOT_UP);
     const list = up.concat(finishedMatches().slice(0, Math.max(0, SHOT_N - up.length)));
+    /* ★ 与首页共用 homeFixtureData —— 页面怎么显示，截图就怎么画 */
+    const seqs = ((APP_CONFIG.home || {}).showSeq === false) ? {} : SEQ_ALL;
     const fixtures = list.map(m => {
-      const db = dayBlock(m.match_date);
-      const fin = m.status === 'finished';
-      let score = '未开始', sc = '#8E9AAE', state = '';
-      if (fin) {
-        const a = Number(m.our_score) || 0, b = Number(m.opp_score) || 0;
-        score = a + ' : ' + b;
-        sc = a > b ? '#0E9F6E' : a < b ? '#E02424' : '#8E9AAE';
-        state = '已结束';
-      } else if (m.status === 'cancelled') { score = '取消'; state = '已取消'; }
-      else { state = db.t || '待定'; }
-      /* 场地 + 该场地战绩（与页面一致：日期 → 对手 → 场地） */
-      const vv = venueById(m.venue_id);
-      const vr = venueRecord(m.venue_id);
-      const venueTxt = vv ? (vv.name + (vr ? '  ' + vr.w + '胜' + vr.d + '平' + vr.l + '负 · ' + vr.rate + '%' : ''))
-        : '场地待定';
-      /* 与该对手的历史交锋 */
-      const orr = oppRecord(m.opponent);
-      const oppRecTxt = orr ? (orr.w + '胜' + orr.d + '平' + orr.l + '负 · ' + orr.rate + '%') : '';
+      const t = homeFixtureData(m, seqs[m.id]);
+      /* 截图上比分用带空格的排版更好看 */
+      const scoreTxt = t.score === 'VS' ? 'VS' : t.score.replace(':', ' : ');
       return {
-        d: db.d, m: db.m, opp: m.opponent || '待定对手', home: !!m.is_home,
-        comp: m.competition || '', compColor: COMP_COLOR[m.competition] || '#1D4ED8',
-        score: score, scoreColor: sc, state: state,
-        venue: venueTxt, oppRec: oppRecTxt
+        d: t.d, m: t.m,
+        seq: t.seq, us: t.us, opp: t.opp,
+        comp: t.comp, compColor: t.compColor,
+        venueName: t.venueName,
+        score: scoreTxt, scoreColor: t.scoreColor, state: t.state
       };
     });
 
@@ -1834,7 +1836,11 @@
       recent: recent,
       rate: r.rate,
       fixtures: fixtures,
-      fixtureSub: '共 ' + ST.matches.length + ' 场',
+      /* 与首页 renderHomeFixtures 同口径（含兜底） */
+      fixtureSub: '共 ' + (function () {
+        const visAll = ST.matches.filter(isHomeVisible);
+        return (visAll.length === 0 && ST.matches.length > 0) ? ST.matches.length : visAll.length;
+      })() + ' 场',
       goals: goals,
       assists: assists,
       date: d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')

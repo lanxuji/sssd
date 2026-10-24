@@ -8,6 +8,8 @@
 
   const FONT = '"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Helvetica Neue",Arial,sans-serif';
   const NAVY = '#0B5F42', NAVY2 = '#0E8B60', GOLD = '#F2B705', GOLD_D = '#C89204';
+  /* 文字色：模块级共享（局部定义容易在别的卡片里访问不到而报错） */
+  const INK = '#0B3B2C', INK2 = '#3E6B5A', INK3 = '#6B8A7C';
   const TXT = '#0B3B2C', MUTED = '#6B8A7C', LINE = 'rgba(11,95,66,.14)', CARD = 'rgba(255,255,255,.72)', BG = '#F4F8F6';
 
   /* ---------- 绘图小工具 ---------- */
@@ -168,7 +170,6 @@
       /* 卡片：透明玻璃（与网页一致：半透明白底 + 深色文字） */
       const GLASS = 'rgba(255,255,255,.74)';
       const HAIR = 'rgba(11,95,66,.14)';
-      const INK = '#0B3B2C', INK2 = '#3E6B5A', INK3 = '#6B8A7C';
       const MAIN = '#0B5F42';
 
       fillRR(ctx, x, y, CW, h, 18, GLASS);
@@ -287,25 +288,44 @@
         text(ctx, m.d, x + 14 + 20, cy + 17, { size: 15, weight: '800', color: NAVY, align: 'center' });
         text(ctx, m.m, x + 14 + 20, cy + 31, { size: 10, color: MUTED, align: 'center' });
 
-        /* 赛事标签 */
+        /* 第一行：编号 +（赛事标签）+ 我方 VS 对手
+           与首页 homeFixtureRow 完全同源 */
         let tx = x + 64;
+        if (m.seq) {
+          const sTxt = '第' + m.seq + '场';
+          ctx.font = '800 10.5px ' + FONT;
+          const w = ctx.measureText(sTxt).width + 12;
+          fillRR(ctx, tx, cy + 3, w, 16, 5, NAVY);
+          text(ctx, sTxt, tx + w / 2, cy + 11 + 1, { size: 10.5, weight: '800', color: '#fff', align: 'center', baseline: 'middle' });
+          tx += w + 6;
+        }
         if (m.comp) {
           ctx.font = '700 10px ' + FONT;
           const w = ctx.measureText(m.comp).width + 12;
-          fillRR(ctx, tx, cy + 2, w, 16, 4, m.compColor || '#1D4ED8');
-          text(ctx, m.comp, tx + w / 2, cy + 10 + 1, { size: 10, weight: '700', color: '#fff', align: 'center', baseline: 'middle' });
+          fillRR(ctx, tx, cy + 3, w, 16, 4, m.compColor || '#1D4ED8');
+          text(ctx, m.comp, tx + w / 2, cy + 11 + 1, { size: 10, weight: '700', color: '#fff', align: 'center', baseline: 'middle' });
           tx += w + 6;
         }
-        /* 场地 + 该场地战绩：放在对手下方（顺序：日期 → 对手 → 场地） */
-        if (m.venue) text(ctx, m.venue, x + 64, cy + 43, { size: 10.5, color: MUTED });
-
-        /* 对手 + 交锋战绩（同一行，战绩用主色小字） */
+        /* 我方 VS 对手（只放下半部分空间内的宽度） */
         ctx.font = '700 13.5px ' + FONT;
-        const oppName = ellipsis(ctx, m.opp, CW - 64 - 96);
-        text(ctx, oppName, x + 64, cy + 24, { size: 13.5, weight: '700' });
-        if (m.oppRec) {
-          const ow = ctx.measureText(oppName).width;
-          text(ctx, m.oppRec, x + 64 + ow + 7, cy + 24, { size: 10, weight: '800', color: NAVY });
+        const rightLimit = CW - 16 - 62;              // 给右侧比分留位置
+        const usName = ellipsis(ctx, m.us || '', rightLimit - tx - 40);
+        text(ctx, usName, tx, cy + 24, { size: 13.5, weight: '700' });
+        let vx = tx + ctx.measureText(usName).width + 6;
+        /* VS 小标签 */
+        ctx.font = '800 11.5px ' + FONT;
+        const vw = ctx.measureText('VS').width + 10;
+        fillRR(ctx, vx, cy + 15, vw, 15, 4, 'rgba(11,95,66,.10)');
+        text(ctx, 'VS', vx + vw / 2, cy + 22.5 + 1, { size: 11.5, weight: '800', color: INK3, align: 'center', baseline: 'middle' });
+        vx += vw + 6;
+        const oppName = ellipsis(ctx, m.opp || '待定对手', Math.max(30, rightLimit - vx));
+        text(ctx, oppName, vx, cy + 24, { size: 13.5, weight: '700' });
+
+        /* 第二行：场地名（战绩在弹窗里，截图只显示场地名，与首页一致） */
+        if (m.venueName) {
+          text(ctx, '场地：' + m.venueName, x + 64, cy + 42, { size: 10.5, color: MUTED });
+        } else {
+          text(ctx, '场地待定', x + 64, cy + 42, { size: 10.5, color: MUTED });
         }
 
         /* 比分 / 状态 */
