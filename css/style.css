@@ -161,12 +161,8 @@ img{max-width:100%}
   border-radius:20px;padding:1px 7px;white-space:nowrap;line-height:1.6}
 /* 胜率分级配色：≤60% 红 / 60~80% 黄 / >80% 绿
    底色用低透明度，文字用深色，保证浅底玻璃上清晰可读 */
-.rt-low{background:rgba(224,36,36,.14);border-color:rgba(224,36,36,.34);color:#A01111}
-.rt-low i,.rt-low{color:#A01111}
-.rt-mid{background:rgba(217,164,4,.18);border-color:rgba(217,164,4,.40);color:#7A5A00}
-.rt-mid i{color:#7A5A00}
-.rt-high{background:rgba(14,159,110,.16);border-color:rgba(14,159,110,.38);color:#0A6B4A}
-.rt-high i{color:#0A6B4A}
+/* 胜率分级配色统一放在文件靠后位置（见「胜率分级」区块），
+   避免被后面定义的 .hf-tag 等通用徽标样式覆盖 */
 /* ---- 首页赛程行：对阵双方 + 双方战绩 + 场地战绩 ---- */
 .hfix{align-items:flex-start;padding:11px 12px}
 .hfix .fix-date{margin-top:2px}
@@ -540,3 +536,23 @@ input[type=number]{-moz-appearance:textfield}
   .tabbar,.appbar{width:100%}
   .sheet,.shotview{width:100%}
 }
+
+/* ============================================================
+ *  胜率分级配色（必须放在所有徽标样式之后，否则会被 .hf-tag 覆盖）
+ *  ≤60% 红 / 60~80% 黄 / >80% 绿
+ *  用双类选择器提高优先级，保证首页、赛程页颜色一致
+ * ============================================================ */
+.hf-tag.rt-low,.fix-opprec.rt-low,.fix-venue.rt-low{
+  background:rgba(224,36,36,.15);border-color:rgba(224,36,36,.40);color:#A01111}
+.hf-tag.rt-mid,.fix-opprec.rt-mid,.fix-venue.rt-mid{
+  background:rgba(217,164,4,.20);border-color:rgba(217,164,4,.46);color:#7A5A00}
+.hf-tag.rt-high,.fix-opprec.rt-high,.fix-venue.rt-high{
+  background:rgba(14,159,110,.18);border-color:rgba(14,159,110,.42);color:#0A6B4A}
+/* 场地徽标里的战绩小字（<i>）跟随同色 */
+.fix-venue.rt-low i{color:#A01111}
+.fix-venue.rt-mid i{color:#7A5A00}
+.fix-venue.rt-high i{color:#0A6B4A}
+/* 兜底：任何带 rt-* 的元素都能上色 */
+.rt-low{background-color:rgba(224,36,36,.15);border-color:rgba(224,36,36,.40);color:#A01111}
+.rt-mid{background-color:rgba(217,164,4,.20);border-color:rgba(217,164,4,.46);color:#7A5A00}
+.rt-high{background-color:rgba(14,159,110,.18);border-color:rgba(14,159,110,.42);color:#0A6B4A}
