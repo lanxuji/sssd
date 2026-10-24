@@ -24,7 +24,7 @@
   });
 
   /* ★ 版本号：改代码时记得 +1，用于确认用户浏览器拿到的是不是最新版 */
-  const APP_VER = 'v29';
+  const APP_VER = 'v30';
   /* 实际生效的 Service Worker 缓存版本（从 sw.js 里读出来） */
   let SW_VER = '';
   async function readSwVer() {
@@ -519,7 +519,7 @@
         '<div class="fix-top">' +
           (sq ? '<span class="hf-seq">第' + sq + '场</span>' : '') +
           (showTag && cp ? '<span class="ctag c-' + esc(cp) + '">' + esc(cp) + '</span>' : '') +
-          '<span class="fix-opp">' + esc(m.opponent || '待定对手') + '</span>' +
+          '<span class="fix-opp hf-link" data-opp="' + esc(m.opponent || '待定对手') + '">' + esc(m.opponent || '待定对手') + '</span>' +
           oppTagHtml(m) +
         '</div>' +
         /* 第二行：场地 + 该场地战绩 */
@@ -597,32 +597,119 @@
     const showTag = (APP_CONFIG.home || {}).showCompTag !== false;
     const compTag = (showTag && m.competition)
       ? '<span class="ctag c-' + esc(m.competition) + '">' + esc(m.competition) + '</span>' : '';
-    const or = oppRecord(opp);
     const v = venueById(m.venue_id);
-    const vr = venueRecord(m.venue_id);
 
-    const oppTxt = or ? (or.w + '胜' + or.d + '平' + or.l + '负  胜率' + or.rate + '%') : '首次交手';
-    const venTxt = v ? (vr ? (vr.w + '胜' + vr.d + '平' + vr.l + '负  胜率' + vr.rate + '%') : '暂无战绩') : '';
-
+    /* 首页只放「对阵双方 + 场地名 + 比分」，
+       胜负平 / 胜率移到点击后弹出的详情里，行本身保持干净 */
     return '<div class="fix hfix" data-mid="' + esc(m.id) + '">' +
       '<div class="fix-date"><b>' + db.d + '</b><span>' + db.m + '</span></div>' +
       '<div class="fix-mid">' +
-        /* 第一行：序号 + 对阵双方 */
         '<div class="hf-top">' +
           (seq ? '<span class="hf-seq">第' + seq + '场</span>' : '') + compTag +
-          '<span class="hf-vs"><b>' + esc(us) + '</b><i>VS</i><b>' + esc(opp) + '</b></span>' +
+          /* 对手名可点 → 弹出与该对手的交锋战绩 */
+          '<span class="hf-vs"><b>' + esc(us) + '</b><i>VS</i>' +
+          '<b class="hf-link" data-opp="' + esc(opp) + '">' + esc(opp) + '</b></span>' +
         '</div>' +
-        /* 第二行：与该对手的交锋战绩 */
-        '<div class="hf-line"><span class="hf-tag ' + (or ? rateClass(or.rate) : '') + '">' + esc(oppTxt) + '</span></div>' +
-        /* 第三行：场地 + 该场地战绩 */
-        (v ? '<div class="hf-line"><span class="hf-lb">场地：</span><b class="hf-ven">' + esc(v.name) + '</b>' +
-          '<span class="hf-tag ' + (vr ? rateClass(vr.rate) : '') + '">' + esc(venTxt) + '</span></div>'
-          : '<div class="hf-line"><span class="hf-lb">场地待定</span></div>') +
+        /* 场地名可点 → 弹出定位 + 该场地战绩 */
+        '<div class="hf-line">' +
+          (v ? '<span class="hf-lb">场地：</span>' +
+              '<b class="hf-ven hf-link" data-vid="' + esc(v.id) + '">' + esc(v.name) + '</b>'
+            : '<span class="hf-lb">场地待定</span>') +
+        '</div>' +
       '</div>' +
       '<div class="fix-right"><div class="fix-score ' + cls + '">' + score + '</div>' +
       '<div style="margin-top:3px"><span class="pill ' + (fin ? 'fin' : 'up') + '">' +
       (fin ? '已结束' : (m.status === 'cancelled' ? '已取消' : '未开始')) + '</span></div></div>' +
       '</div>';
+  }
+
+  /* ---------------- 点击弹出：对手战绩 / 场地详情 ---------------- */
+
+  /* 胜负平 + 胜率的大号统计块 */
+  function recStatHtml(r, label) {
+    if (!r) return '<div class="note">' + esc(label) + '：暂无数据</div>';
+    return '<div class="rs-wrap">' +
+      '<div class="rs-main"><b>' + r.rate + '%</b><span>胜率</span></div>' +
+      '<div class="rs-grid">' +
+        '<div class="rs-c"><b>' + r.n + '</b><span>场次</span></div>' +
+        '<div class="rs-c win"><b>' + r.w + '</b><span>胜</span></div>' +
+        '<div class="rs-c draw"><b>' + r.d + '</b><span>平</span></div>' +
+        '<div class="rs-c lose"><b>' + r.l + '</b><span>负</span></div>' +
+      '</div></div>';
+  }
+
+  /* 逐场小列表：日期 / 对手 / 比分，胜绿负红 */
+  function matchMiniList(list) {
+    if (!list.length) return '<div class="empty" style="padding:12px 0">暂无</div>';
+    return list.map(m => {
+      const a = Number(m.our_score) || 0, b = Number(m.opp_score) || 0;
+      const cls = a > b ? 'win' : (a < b ? 'lose' : 'draw');
+      const d = new Date(m.match_date || 0);
+      const dt = isNaN(d) ? '待定' : (d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate());
+      const v = venueById(m.venue_id);
+      return '<div class="mini" data-goto="' + esc(m.id) + '">' +
+        '<span class="mini-d">' + esc(dt) + '</span>' +
+        '<span class="mini-v">' + esc(v ? v.name : '—') + '</span>' +
+        '<span class="mini-s ' + cls + '">' + a + ':' + b + '</span></div>';
+    }).join('');
+  }
+
+  /* 点击对手 → 与该对手的历史交锋 */
+  function openOppSheet(name) {
+    const key = normOpp(name);
+    const list = finishedMatches().filter(m => normOpp(m.opponent) === key)
+      .sort((a, b) => new Date(b.match_date || 0) - new Date(a.match_date || 0));
+    const r = oppRecord(name);
+    openSheet('对阵 ' + name,
+      recStatHtml(r, '交锋') +
+      '<div class="rs-note">共交手 ' + (r ? r.n : 0) + ' 场' +
+        (r ? '，' + r.w + '胜 ' + r.d + '平 ' + r.l + '负' : '') + '</div>' +
+      '<div class="block"><div class="block-hd"><h3>交锋记录</h3>' +
+      '<span class="block-sub">点一行看该场详情</span></div>' +
+      '<div class="list">' + matchMiniList(list) + '</div></div>', () => {
+        $$('#sheetBody .mini').forEach(n => n.onclick = () => {
+          closeSheet(); setTimeout(() => openMatch(n.dataset.goto), 180);
+        });
+      });
+  }
+
+  /* 点击场地 → 定位信息 + 该场地战绩 */
+  function openVenueSheet(id) {
+    const v = venueById(id); if (!v) return;
+    const r = venueRecord(id);
+    const list = finishedMatches().filter(m => m.venue_id === id)
+      .sort((a, b) => new Date(b.match_date || 0) - new Date(a.match_date || 0));
+
+    /* 定位：有地址就拼地图搜索链接，有 map_url 就直接用 */
+    const hasMap = !!(v.map_url && String(v.map_url).trim());
+    const addr = (v.address || '').trim();
+    const mapHref = hasMap ? String(v.map_url).trim()
+      : (addr ? 'https://uri.amap.com/search?keyword=' + encodeURIComponent(addr) : '');
+
+    const info =
+      (v.surface ? '<div class="vrow"><span>类型</span><b>' + esc(v.surface) + '</b></div>' : '') +
+      (v.price != null && v.price !== '' ? '<div class="vrow"><span>价格</span><b>¥' + esc(v.price) + '/场</b></div>' : '') +
+      (v.contact ? '<div class="vrow"><span>联系</span><b>' + esc(v.contact) + '</b></div>' : '') +
+      (v.remark ? '<div class="vrow"><span>备注</span><b>' + esc(v.remark) + '</b></div>' : '');
+
+    openSheet('场地 · ' + v.name,
+      '<div class="vloc">' +
+        '<div class="vloc-n">' + esc(v.name) + '</div>' +
+        (addr ? '<div class="vloc-a">📍 ' + esc(addr) + '</div>' : '<div class="vloc-a dim">未填写地址</div>') +
+      '</div>' +
+      (mapHref ? '<a class="btn wide big" style="text-align:center;line-height:40px;text-decoration:none;margin-bottom:12px" ' +
+        'href="' + esc(mapHref) + '" target="_blank" rel="noopener">🧭 打开导航</a>' : '') +
+      (info ? '<div class="block">' + info + '</div>' : '') +
+      recStatHtml(r, '该场地战绩') +
+      '<div class="rs-note">在此场地共 ' + (r ? r.n : 0) + ' 场' +
+        (r ? '，' + r.w + '胜 ' + r.d + '平 ' + r.l + '负' : '') + '</div>' +
+      '<div class="block"><div class="block-hd"><h3>在这里踢过的比赛</h3>' +
+      '<span class="block-sub">点一行看该场详情</span></div>' +
+      '<div class="list">' + matchMiniList(list) + '</div></div>', () => {
+        $$('#sheetBody .mini').forEach(n => n.onclick = () => {
+          closeSheet(); setTimeout(() => openMatch(n.dataset.goto), 180);
+        });
+      });
   }
 
   function renderHomeFixtures() {
@@ -647,6 +734,15 @@
     $('#homeFixtures').innerHTML = list.length
       ? list.map(m => homeFixtureRow(m, seqs[m.id])).join('')
       : '<div class="empty"><i>📅</i>暂无赛程，点击右上角 ⚙️ 登录后可添加</div>';
+    /* 点对手名 → 交锋战绩；点场地名 → 定位 + 场地战绩
+       （点整行仍然是看这场比赛的详情） */
+    $$('#homeFixtures .hf-link').forEach(n => {
+      n.onclick = e => {
+        e.stopPropagation();
+        if (n.dataset.opp) openOppSheet(n.dataset.opp);
+        else if (n.dataset.vid) openVenueSheet(n.dataset.vid);
+      };
+    });
     /* 场次小计：按实际显示的口径统计 */
     const visN = useAll ? ST.matches.length : visAll.length;
     $('#fixtureSub').textContent = '共 ' + visN + ' 场';
@@ -731,6 +827,10 @@
     }
     $$('#allFixtures .fix').forEach(n => n.onclick = () => openMatch(n.dataset.mid));
     $$('#homeFixtures .fix').forEach(n => n.onclick = () => openMatch(n.dataset.mid));
+    /* 点对手名 → 弹出交锋战绩（不触发整行的比赛详情） */
+    $$('#allFixtures .fix-opp[data-opp]').forEach(n => {
+      n.onclick = e => { e.stopPropagation(); openOppSheet(n.dataset.opp); };
+    });
   }
 
   function renderFullRank() {

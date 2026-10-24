@@ -556,3 +556,45 @@ input[type=number]{-moz-appearance:textfield}
 .rt-low{background-color:rgba(224,36,36,.15);border-color:rgba(224,36,36,.40);color:#A01111}
 .rt-mid{background-color:rgba(217,164,4,.20);border-color:rgba(217,164,4,.46);color:#7A5A00}
 .rt-high{background-color:rgba(14,159,110,.18);border-color:rgba(14,159,110,.42);color:#0A6B4A}
+
+/* ============================================================
+ *  可点击文字 + 战绩详情弹窗（v30）
+ * ============================================================ */
+/* 首页可点击文字：虚线下划线提示「点得动」 */
+.hf-link{cursor:pointer;border-bottom:1px dashed rgba(11,95,66,.45);padding-bottom:1px}
+.hf-link:active{background:rgba(11,95,66,.10)}
+.hf-ven.hf-link{font-size:12px}
+
+/* ---- 战绩统计块：大号胜率 + 胜平负格子 ---- */
+.rs-wrap{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.rs-main{flex:none;width:84px;text-align:center;background:rgba(11,95,66,.09);
+  border:1px solid var(--hair);border-radius:12px;padding:8px 4px}
+.rs-main b{display:block;font-size:23px;font-weight:800;color:var(--navy);line-height:1.1}
+.rs-main span{font-size:10.5px;color:var(--muted)}
+.rs-grid{flex:1;display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.rs-c{text-align:center;border:1px solid var(--hair);border-radius:10px;padding:6px 2px}
+.rs-c b{display:block;font-size:17px;font-weight:800;color:var(--ink);line-height:1.2}
+.rs-c span{font-size:10.5px;color:var(--muted)}
+.rs-c.win b{color:#0A6B4A} .rs-c.draw b{color:#7A5A00} .rs-c.lose b{color:#A01111}
+.rs-note{font-size:12px;color:var(--muted);margin-bottom:12px}
+
+/* ---- 逐场小列表 ---- */
+.mini{display:flex;align-items:center;gap:10px;padding:8px 2px;
+  border-bottom:1px dashed var(--hair);cursor:pointer;font-size:13px}
+.mini:last-child{border-bottom:0}
+.mini:active{background:rgba(11,95,66,.06)}
+.mini-d{flex:none;width:76px;color:var(--muted);font-size:12px}
+.mini-v{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.mini-s{flex:none;font-weight:800;font-size:14px;min-width:42px;text-align:right}
+.mini-s.win{color:#0A6B4A} .mini-s.draw{color:#7A5A00} .mini-s.lose{color:#A01111}
+
+/* ---- 场地定位卡 ---- */
+.vloc{margin-bottom:12px}
+.vloc-n{font-size:17px;font-weight:800;color:var(--ink)}
+.vloc-a{font-size:12.5px;color:var(--ink-2);margin-top:3px;line-height:1.5}
+.vloc-a.dim{color:var(--muted)}
+/* 场地信息行 */
+.vrow{display:flex;align-items:flex-start;gap:10px;padding:7px 0;border-bottom:1px dashed var(--hair)}
+.vrow:last-child{border-bottom:0}
+.vrow span{flex:none;width:48px;font-size:12px;color:var(--muted)}
+.vrow b{flex:1;min-width:0;font-size:13px;font-weight:600;color:var(--ink);line-height:1.45}
